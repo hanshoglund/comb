@@ -57,7 +57,7 @@ callback info flags count inp outp = do
 
         forM_ [0..(fromIntegral count - 1)] $ \n -> do 
             v <- peekElemOff inp n
-            pokeElemOff outp (n*2)   (v*0.3)
-            pokeElemOff outp (n*2+1) (v*0.3)
+            pokeElemOff outp (n*2)   (v*0.3) -- left output
+            pokeElemOff outp (n*2+1) (v*0.3) -- right output
             return ()
         return Continue
