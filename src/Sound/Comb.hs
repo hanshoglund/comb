@@ -102,6 +102,10 @@ callback sampleCount info_ flags_ count inp outp = do
         modifyIORef sampleCount (+ count)
         return Continue
 
+
+-- forall s . (Semigroup s, Monoid s, Typeable s) => s -> Time -> [Float] -> (s, Float)
+
+
 --  A signal is a function of inputs and time over some local state
 --  Note that input/outputs may include global buffers
 --  TODO strictness, turn networks on and off (stepping)
@@ -109,7 +113,6 @@ callback sampleCount info_ flags_ count inp outp = do
 type Time   = Int
 type SignalState = [[Float]]
 newtype Signal = Signal { getSignal ::
-    -- forall s . (Semigroup s, Monoid s, Typeable s) => s -> Time -> [Float] -> (s, Float)
     (s ~ SignalState) => s -> Time -> [Float] -> (s, Float)
     }
 instance Num Signal where
@@ -187,26 +190,13 @@ test = mapM_ (putStrLn.toBars) $ runS sig inp
         sig = sinS $ timeS*0.15
         -- sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
 
+second f (a,b)      = (a, f b)
+cast'               = fromJust . cast
+fromJust (Just x)   = x
+dup x               = (x, x)
 
 
 
-
-
--- mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
-
-
-
-
-
-
--- biquad b0 a1 b1 a2 b2 x = recurS $ \y x ->
-    -- b0*x + b1*(delayS x) + b2*(delay2S x) - a1*y - a2*(delayS y)
-
-second f (a,b) = (a, f b)
-cast' = fromJust . cast
-fromJust (Just x) = x
-dup x = (x, x)
--- TODO sample level
 
 
 {-
@@ -231,52 +221,17 @@ delay :: P11
 -}
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+-- | From range (0,1) to range (-1,1)
 toFull :: Num a => a -> a
 toFull x = (x*2)-1
 
+-- | From range (-1,1) to range (0,1)
 toPos  :: Fractional a => a -> a
 toPos x  = (x+1)/2
 
--- view as bars if in range (-1,1)
+-- | View as bars if in range (-1,1)
 toBars :: RealFrac a => a -> String
 toBars x = case round (toPos x * 20) of
-    0  -> ".                    |"
-    1  -> " .                   |"
-    2  -> "  .                  |"
-    3  -> "   .                 |"
-    4  -> "    .                |"
-    5  -> "     .               |"
-    6  -> "      .              |"
-    7  -> "       .             |"
-    8  -> "        .            |"
-    9  -> "         .           |"
-    10 -> "          .          |"
-    11 -> "           .         |"
-    12 -> "            .        |"
-    13 -> "             .       |"
-    14 -> "              .      |"
-    15 -> "               .     |"
-    16 -> "                .    |"
-    17 -> "                 .   |"
-    18 -> "                  .  |"
-    19 -> "                   . |"
-    20 -> "                    .|"
+    n  -> replicate n ' ' ++ "." ++ replicate (20-n) ' ' ++ "|"
 
 tau = 2 * pi
