@@ -19,6 +19,7 @@ import Control.Applicative
 import Control.Monad
 import Data.List (mapAccumL)
 import Foreign.Storable
+import Data.List (transpose)
 
 import Sound.PortAudio
 import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
@@ -111,7 +112,30 @@ callback sampleCount info_ flags_ count inp outp = do
 --  TODO strictness, turn networks on and off (stepping)
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
-type State  = ()
+data State  = State Float State State
+instance Monoid State where
+    mempty = State 0 mempty mempty
+    mappend = error "No mappend"
+
+readBuf  :: State -> Float
+readBuf (State x s t) = x
+
+writeBuf :: Float -> State -> State
+writeBuf x (State _ s t) = State x s t
+
+splitState :: State -> (Float, State, State)
+splitState (State x s t) = (x, s, t)
+
+mergeState :: Float -> State -> State -> State
+mergeState x s t = State x s t
+
+upState :: State -> State
+upState s = State 0 s mempty
+
+downState :: State -> State
+downState (State x s t) = s
+
+
 
 newtype Signal = Signal { getSignal ::
     State -> Time -> [Float] -> (State, Float)
@@ -149,10 +173,11 @@ mulS = lift2S (*)
 
 -- Lift pure binary func
 lift2S :: (Float -> Float -> Float) -> Signal -> Signal -> Signal
-lift2S op (Signal a) (Signal b) = Signal $ \s t i -> let 
-    (sa,xa) = a s t i
-    (sb,xb) = b s t i 
-    in (sa <> sb, xa `op` xb)
+lift2S op (Signal a) (Signal b) = Signal $ \s t i -> let
+    (u,p,q)  = splitState s
+    (sa,xa) = a p t i
+    (sb,xb) = b q t i 
+    in (mergeState u sa sb, xa `op` xb)
     -- Is <> right for combining states
     -- Alternatively, we might run the state transformations in sequence
     -- Anyhow, state transformations should not interact, how to assure this?
@@ -162,13 +187,15 @@ delayS    = loopS $ \o a -> (a, o)
 recurS f  = loopS (\x -> dup . f x)
 
 -- Recursive transform, similar to scanl
--- Function have form (\old new -> res)
+-- Function have form (\fb new -> (fb, res))
 loopS :: (Float -> Float -> (Float, Float)) -> Signal -> Signal
 loopS op (Signal a) = Signal $ \s t i -> let 
-    (sa,xa) = a s t i
-    xo      = undefined -- TODO from state
-    (sc,xc) = xo `op` xa
-    in (sa <> {-sc-}mempty, xc) -- TODO store state
+    (sa,xa) = first downState $ a (upState s) t i
+    xo      = readBuf sa
+    (fb,xc) = xo `op` xa
+    in (writeBuf fb sa, xc)
+
+
 
 -- |
 -- Run a signal starting at time 0 and default state, ignoring output state
@@ -184,11 +211,12 @@ test :: IO ()
 test = mapM_ (putStrLn.toBars) $ runS sig inp
     where    
         -- one channel input
-        inp = (fmap.fmap) (/ 3) $ concat $ replicate 6 $ [[0],[1],[2],[3],[2],[1],[0],[-1],[-2],[-3],[-2],[-1]]
+        inp = (fmap.fmap) (/ 10) $ concat $ replicate 4 $ transpose [[-10..10]]
                        
-        sig = sinS $ timeS*0.15
+        sig = lift2S (\a b -> a) (delayS $ inputS 0) (inputS 0)
         -- sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
 
+first  f (a,b)      = (f a, b)
 second f (a,b)      = (a, f b)
 cast'               = fromJust . cast
 fromJust (Just x)   = x
@@ -230,7 +258,14 @@ toPos x  = (x+1)/2
 
 -- | View as bars if in range (-1,1)
 toBars :: RealFrac a => a -> String
-toBars x = case round (toPos x * 20) of
-    n  -> replicate n ' ' ++ "." ++ replicate (20-n) ' ' ++ "|"
+toBars x = let n = round (toPos x * width) in
+    if n > width || n < 0
+        then replicate (width+1) ' ' ++ "|"
+        else replicate n ' ' ++ "." ++ replicate (width-n) ' ' ++ "|"
+    where
+        width = 80
+
 
 tau = 2 * pi
+
+
