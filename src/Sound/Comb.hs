@@ -108,50 +108,50 @@ callback sampleCount info_ flags_ count inp outp = do
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
 newtype Signal = Signal { getSignal ::
-    forall s . (Semigroup s, Monoid s, Typeable s) => Time -> s -> [Float] -> (s, Float)
+    forall s . (Semigroup s, Monoid s, Typeable s) => s -> Time -> [Float] -> (s, Float)
     }
 
 
 inputS  :: Int -> Signal
-inputS n = Signal $ \t s i -> (s, i !! n)
+inputS n = Signal $ \s t i -> (s, i !! n)
 
 constS :: Float -> Signal
-constS x = Signal $ \t s i -> (s, x)
+constS x = Signal $ \s t i -> (s, x)
 
 addS :: Signal -> Signal -> Signal
-addS (Signal f) (Signal g) = Signal $ \t s i -> let 
-    (sa,xa) = f t s i
-    (sb,xb) = g t s i 
+addS (Signal f) (Signal g) = Signal $ \s t i -> let 
+    (sa,xa) = f s t i
+    (sb,xb) = g s t i 
     in (sa <> sb, xa + xb)
 
 mulS :: Signal -> Signal -> Signal
-mulS (Signal f) (Signal g) = Signal $ \t s i -> let 
-    (sa,xa) = f t s i
-    (sb,xb) = g t s i 
+mulS (Signal f) (Signal g) = Signal $ \s t i -> let 
+    (sa,xa) = f s t i
+    (sb,xb) = g s t i 
     in (sa <> sb, xa * xb)
 
--- Note that for non-input (non-reactive) signals, we might just shift time
+-- Note that for non-input (non-reactive) signals, we might juss thift time
 -- However to get properly shifted inputs, we need the state    
 delaySNR :: Signal -> Signal
-delaySNR (Signal f) = Signal $ \t s i -> f (t-1) s i
+delaySNR (Signal f) = Signal $ \s t i -> f s (t-1) i
 
 delayS :: Signal -> Signal
-delayS (Signal f) = Signal $ \t s i -> let
-    in f (t-1) undefined undefined
+delayS (Signal f) = Signal $ \s t i -> let
+    in f (cast' i) (t-1) (cast' s)
 
 
 -- mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
 
 runS :: Signal -> [[Float]] -> [Float]
-runS (Signal f) inputs = snd $ mapAccumL proc ([0,0..]::[Float]) (zip inputs [0..])
+runS (Signal f) inputs = snd $ mapAccumL proc (repeat 0::[Float]) (zip [0..] inputs)
     where
-        proc s (xs, t) = f t s xs
+        proc s (t, xs) = f s t xs
 
 test = mapM_ (putStrLn.toBars) $ runS sig inp
     where
         inp = (fmap.fmap) (/ 3) [[0],[1],[2],[3],[2],[1],[0],[-1],[-2],[-3],[-2],[-1]]
 
-        sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
+        sig = (delayS.delayS) (inputS 0)
 
 
 
