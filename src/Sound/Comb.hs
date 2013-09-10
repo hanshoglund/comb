@@ -1,5 +1,6 @@
 
-{-# LANGUAGE RankNTypes, TypeOperators, DeriveFunctor, GADTs, MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction, 
+    RankNTypes, TypeOperators, DeriveFunctor, GADTs, MultiParamTypeClasses #-}
 
 module Sound.Comb -- (
 --    ) 
@@ -7,6 +8,8 @@ where
 
 import Data.IORef
 import Data.Int
+import Data.Semigroup
+import Data.Typeable
 import Data.Fixed
 import System.Random
 import Data.Functor.Contravariant
@@ -14,6 +17,7 @@ import Foreign.Ptr
 import Foreign.C.Types
 import Control.Applicative
 import Control.Monad
+import Data.List (mapAccumL)
 import Foreign.Storable
 
 import Sound.PortAudio
@@ -103,11 +107,104 @@ callback sampleCount info_ flags_ count inp outp = do
 --  TODO strictness, turn networks on and off (stepping)
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
-type Signal = forall s . Time -> s -> [Float] -> (s, [Float])
+newtype Signal = Signal { getSignal ::
+    forall s . (Semigroup s, Monoid s, Typeable s) => Time -> s -> [Float] -> (s, Float)
+    }
+
+
+inputS  :: Int -> Signal
+inputS n = Signal $ \t s i -> (s, i !! n)
+
+constS :: Float -> Signal
+constS x = Signal $ \t s i -> (s, x)
+
+addS :: Signal -> Signal -> Signal
+addS (Signal f) (Signal g) = Signal $ \t s i -> let 
+    (sa,xa) = f t s i
+    (sb,xb) = g t s i 
+    in (sa <> sb, xa + xb)
+
+mulS :: Signal -> Signal -> Signal
+mulS (Signal f) (Signal g) = Signal $ \t s i -> let 
+    (sa,xa) = f t s i
+    (sb,xb) = g t s i 
+    in (sa <> sb, xa * xb)
+
+-- Note that for non-input (non-reactive) signals, we might just shift time
+-- However to get properly shifted inputs, we need the state    
+delaySNR :: Signal -> Signal
+delaySNR (Signal f) = Signal $ \t s i -> f (t-1) s i
+
+delayS :: Signal -> Signal
+delayS (Signal f) = Signal $ \t s i -> let
+    in f (t-1) undefined undefined
+
+
+-- mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
+
+runS :: Signal -> [[Float]] -> [Float]
+runS (Signal f) inputs = snd $ mapAccumL proc ([0,0..]::[Float]) (zip inputs [0..])
+    where
+        proc s (xs, t) = f t s xs
+
+test = mapM_ (putStrLn.toBars) $ runS sig inp
+    where
+        inp = (fmap.fmap) (/ 3) [[0],[1],[2],[3],[2],[1],[0],[-1],[-2],[-3],[-2],[-1]]
+
+        sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
 
 
 
+
+cast' = fromJust . cast
+fromJust (Just x) = x
+
+-- TODO sample level
+
+
+{-
+
+type S = Int -> Double
+type P01 =              S
+type P11 = S         -> S
+type P21 = (S,S)     -> S
+type P31 = (S,S,S)   -> S
+-}
+{-
+par   :: (Sa -> Sb) -> (Sc -> Sd) -> S[a+c] -> S[b+d]
+seq   :: (Sa -> Sb) -> (Sb -> Sd) -> Sa     -> Sd
+split :: P -> P
+merge :: P -> P
+rec   :: P -> P
+
+(+), (-), (||) :: P21
+0, 1, 2        :: P01   
+delay :: P11
+
+-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+toFull :: Num a => a -> a
 toFull x = (x*2)-1
+
+toPos  :: Fractional a => a -> a
 toPos x  = (x+1)/2
 
 -- view as bars if in range (-1,1)
