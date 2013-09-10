@@ -118,26 +118,25 @@ instance Num Signal where
     abs           = liftS abs
     signum        = liftS signum
     fromInteger x = constS (fromInteger x)
-    
 instance Fractional Signal where
     recip = liftS recip
     fromRational x = constS (fromRational x)
 
 -- Constant value
 constS :: Float -> Signal
-constS x = Signal $ \s t i -> (s, x)
+constS x = Signal $ \s t _ -> (s, x)
 
 -- Time in samples
 timeS :: Signal
-timeS = Signal $ \s t i -> (s, fromIntegral t)
+timeS = Signal $ \s t _ -> (s, fromIntegral t)
 
 -- Input number n
 inputS  :: Int -> Signal
-inputS n = Signal $ \s t i -> (s, i !! n)
+inputS n = Signal $ \s t ins -> (s, ins !! n)
 
 -- Lift pure unary func
 liftS :: (Float -> Float) -> Signal -> Signal
-liftS f (Signal g) = Signal $ \s t i -> second f (g s t i)
+liftS f (Signal a) = Signal $ \s t i -> fmap f (a s t i)
 
 sinS = liftS sin
 addS = lift2S (+)
@@ -145,9 +144,9 @@ mulS = lift2S (*)
 
 -- Lift pure binary func
 lift2S :: (Float -> Float -> Float) -> Signal -> Signal -> Signal
-lift2S op (Signal f) (Signal g) = Signal $ \s t i -> let 
-    (sa,xa) = f s t i
-    (sb,xb) = g s t i 
+lift2S op (Signal a) (Signal b) = Signal $ \s t i -> let 
+    (sa,xa) = a s t i
+    (sb,xb) = b s t i 
     in (sa <> sb, xa `op` xb)
     -- Is <> right for combining states
     -- Alternatively, we might run the state transformations in sequence
@@ -155,7 +154,6 @@ lift2S op (Signal f) (Signal g) = Signal $ \s t i -> let
 
 -- biquad b0 a1 b1 a2 b2 x = recurS $ \y x ->
     -- b0*x + b1*(delayS x) + b2*(delay2S x) - a1*y - a2*(delayS y)
-
 delay2S = delayS . delayS    
 delayS = loopS $ \o a -> (a, o)
 
@@ -165,8 +163,8 @@ recurS f = loopS (\x -> dup . f x)
 -- Recursive transform, similar to scanl
 -- Function have form (\old new -> res)
 loopS :: (Float -> Float -> (Float, Float)) -> Signal -> Signal
-loopS op (Signal f) = Signal $ \s t i -> let 
-    (sa,xa) = f s t i
+loopS op (Signal a) = Signal $ \s t i -> let 
+    (sa,xa) = a s t i
     xo      = undefined -- TODO from state
     (sc,xc) = xo `op` xa
     in (sa <> {-sc-}mempty, xc)
@@ -197,9 +195,9 @@ delayS (Signal f) = Signal $ \s t i -> let
 -- > runS signal inputs => output
 --
 runS :: Signal -> [[Float]] -> [Float]
-runS (Signal f) inputs = snd $ mapAccumL proc (mempty::[[Float]]) (zip [0..] inputs)
+runS (Signal a) inputs = snd $ mapAccumL proc (mempty::[[Float]]) (zip [0..] inputs)
     where
-        proc s (t, xs) = f s t xs
+        proc s (t, xs) = a s t xs
 
 test :: IO ()
 test = mapM_ (putStrLn.toBars) $ runS sig inp
