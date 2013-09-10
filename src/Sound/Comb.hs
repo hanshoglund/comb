@@ -123,32 +123,59 @@ instance Fractional Signal where
     recip = liftS recip
     fromRational x = constS (fromRational x)
 
-inputS  :: Int -> Signal
-inputS n = Signal $ \s t i -> (s, i !! n)
-
+-- Constant value
 constS :: Float -> Signal
 constS x = Signal $ \s t i -> (s, x)
 
-lineS :: Signal
-lineS = Signal $ \s t i -> (s, fromIntegral t)
+-- Time in samples
+timeS :: Signal
+timeS = Signal $ \s t i -> (s, fromIntegral t)
 
+-- Input number n
+inputS  :: Int -> Signal
+inputS n = Signal $ \s t i -> (s, i !! n)
+
+-- Lift pure unary func
 liftS :: (Float -> Float) -> Signal -> Signal
 liftS f (Signal g) = Signal $ \s t i -> second f (g s t i)
-
-lift2S :: (Float -> Float -> Float) -> Signal -> Signal -> Signal
-lift2S op (Signal f) (Signal g) = Signal $ \s t i -> let 
-    (sa,xa) = f s t i
-    (sb,xb) = g s t i 
-    in (sa <> sb, xa `op` xb)
 
 sinS = liftS sin
 addS = lift2S (+)
 mulS = lift2S (*)
 
+-- Lift pure binary func
+lift2S :: (Float -> Float -> Float) -> Signal -> Signal -> Signal
+lift2S op (Signal f) (Signal g) = Signal $ \s t i -> let 
+    (sa,xa) = f s t i
+    (sb,xb) = g s t i 
+    in (sa <> sb, xa `op` xb)
+    -- Is <> right for combining states
+    -- Alternatively, we might run the state transformations in sequence
+    -- Anyhow, state transformations should not interact, how to assure this?
+
+-- biquad b0 a1 b1 a2 b2 x = recurS $ \y x ->
+    -- b0*x + b1*(delayS x) + b2*(delay2S x) - a1*y - a2*(delayS y)
+
+delay2S = delayS . delayS    
+delayS = loopS $ \o a -> (a, o)
+
+recurS :: (Float -> Float -> Float) -> Signal -> Signal
+recurS f = loopS (\x -> dup . f x)
+
+-- Recursive transform, similar to scanl
+-- Function have form (\old new -> res)
+loopS :: (Float -> Float -> (Float, Float)) -> Signal -> Signal
+loopS op (Signal f) = Signal $ \s t i -> let 
+    (sa,xa) = f s t i
+    xo      = undefined -- TODO from state
+    (sc,xc) = xo `op` xa
+    in (sa <> {-sc-}mempty, xc)
 
 
 
 
+
+{-
 -- Note that for non-input (non-reactive) signals, we might juss thift time
 -- However to get properly shifted inputs, we need the state    
 delaySNR :: Signal -> Signal
@@ -158,7 +185,8 @@ delayS :: Signal -> Signal
 delayS (Signal f) = Signal $ \s t i -> let
     in f (s ++ [i]) (t-1) (if length s < 1 then [0,0..] else (last s))
     -- FIXME
-
+-}
+    
 
 -- mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
 
@@ -179,15 +207,15 @@ test = mapM_ (putStrLn.toBars) $ runS sig inp
         -- one channel input
         inp = (fmap.fmap) (/ 3) $ concat $ replicate 6 $ [[0],[1],[2],[3],[2],[1],[0],[-1],[-2],[-3],[-2],[-1]]
                        
-        -- sig = sinS $ lineS*0.15
-        sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
+        sig = sinS $ timeS*0.15
+        -- sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
 
 
 
 second f (a,b) = (a, f b)
 cast' = fromJust . cast
 fromJust (Just x) = x
-
+dup x = (x, x)
 -- TODO sample level
 
 
