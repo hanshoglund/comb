@@ -108,9 +108,20 @@ callback sampleCount info_ flags_ count inp outp = do
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
 newtype Signal = Signal { getSignal ::
-    forall s . (Semigroup s, Monoid s, Typeable s) => s -> Time -> [Float] -> (s, Float)
+    -- forall s . (Semigroup s, Monoid s, Typeable s) => s -> Time -> [Float] -> (s, Float)
+    (s ~ [[Float]]) => s -> Time -> [Float] -> (s, Float)
     }
-
+instance Num Signal where
+    a + b = a `addS` b
+    a * b = a `mulS` b
+    negate        = mulS $ constS (-1)
+    abs           = liftS abs
+    signum        = liftS signum
+    fromInteger x = constS (fromInteger x)
+    
+instance Fractional Signal where
+    recip = liftS recip
+    fromRational x = constS (fromRational x)
 
 inputS  :: Int -> Signal
 inputS n = Signal $ \s t i -> (s, i !! n)
@@ -118,17 +129,25 @@ inputS n = Signal $ \s t i -> (s, i !! n)
 constS :: Float -> Signal
 constS x = Signal $ \s t i -> (s, x)
 
-addS :: Signal -> Signal -> Signal
-addS (Signal f) (Signal g) = Signal $ \s t i -> let 
-    (sa,xa) = f s t i
-    (sb,xb) = g s t i 
-    in (sa <> sb, xa + xb)
+lineS :: Signal
+lineS = Signal $ \s t i -> (s, fromIntegral t)
 
-mulS :: Signal -> Signal -> Signal
-mulS (Signal f) (Signal g) = Signal $ \s t i -> let 
+liftS :: (Float -> Float) -> Signal -> Signal
+liftS f (Signal g) = Signal $ \s t i -> second f (g s t i)
+
+lift2S :: (Float -> Float -> Float) -> Signal -> Signal -> Signal
+lift2S op (Signal f) (Signal g) = Signal $ \s t i -> let 
     (sa,xa) = f s t i
     (sb,xb) = g s t i 
-    in (sa <> sb, xa * xb)
+    in (sa <> sb, xa `op` xb)
+
+sinS = liftS sin
+addS = lift2S (+)
+mulS = lift2S (*)
+
+
+
+
 
 -- Note that for non-input (non-reactive) signals, we might juss thift time
 -- However to get properly shifted inputs, we need the state    
@@ -137,25 +156,35 @@ delaySNR (Signal f) = Signal $ \s t i -> f s (t-1) i
 
 delayS :: Signal -> Signal
 delayS (Signal f) = Signal $ \s t i -> let
-    in f (cast' i) (t-1) (cast' s)
+    in f (s ++ [i]) (t-1) (if length s < 1 then [0,0..] else (last s))
+    -- FIXME
 
 
 -- mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
 
+
+-- |
+-- Run a signal starting at time 0 and default state, ignoring output state
+--
+-- > runS signal inputs => output
+--
 runS :: Signal -> [[Float]] -> [Float]
-runS (Signal f) inputs = snd $ mapAccumL proc (repeat 0::[Float]) (zip [0..] inputs)
+runS (Signal f) inputs = snd $ mapAccumL proc (mempty::[[Float]]) (zip [0..] inputs)
     where
         proc s (t, xs) = f s t xs
 
+test :: IO ()
 test = mapM_ (putStrLn.toBars) $ runS sig inp
-    where
-        inp = (fmap.fmap) (/ 3) [[0],[1],[2],[3],[2],[1],[0],[-1],[-2],[-3],[-2],[-1]]
+    where    
+        -- one channel input
+        inp = (fmap.fmap) (/ 3) $ concat $ replicate 6 $ [[0],[1],[2],[3],[2],[1],[0],[-1],[-2],[-3],[-2],[-1]]
+                       
+        -- sig = sinS $ lineS*0.15
+        sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
 
-        sig = (delayS.delayS) (inputS 0)
 
 
-
-
+second f (a,b) = (a, f b)
 cast' = fromJust . cast
 fromJust (Just x) = x
 
