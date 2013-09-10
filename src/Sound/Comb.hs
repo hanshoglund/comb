@@ -143,25 +143,25 @@ newtype Signal = Signal { getSignal ::
 instance Num Signal where
     a + b = a `addS` b
     a * b = a `mulS` b
-    negate        = mulS $ constS (-1)
+    negate        = mulS $ always (-1)
     abs           = liftS abs
     signum        = liftS signum
-    fromInteger x = constS (fromInteger x)
+    fromInteger x = always (fromInteger x)
 instance Fractional Signal where
     recip = liftS recip
-    fromRational x = constS (fromRational x)
+    fromRational x = always (fromRational x)
 
 -- Constant value
-constS :: Float -> Signal
-constS x = Signal $ \s t _ -> (s, x)
+always :: Float -> Signal
+always x = Signal $ \s t _ -> (s, x)
 
 -- Time in samples
-timeS :: Signal
-timeS = Signal $ \s t _ -> (s, fromIntegral t)
+time :: Signal
+time = Signal $ \s t _ -> (s, fromIntegral t)
 
 -- Input number n
-inputS  :: Int -> Signal
-inputS n = Signal $ \s t ins -> (s, ins !! n)
+input  :: Int -> Signal
+input n = Signal $ \s t ins -> (s, ins !! n)
 
 -- Lift pure unary func
 liftS :: (Float -> Float) -> Signal -> Signal
@@ -182,14 +182,14 @@ lift2S op (Signal a) (Signal b) = Signal $ \s t i -> let
     -- Alternatively, we might run the state transformations in sequence
     -- Anyhow, state transformations should not interact, how to assure this?
 
-delay2S   = delayS . delayS    
-delayS    = loopS $ \o a -> (a, o)
-recurS f  = loopS (\x -> dup . f x)
+delay2   = delay . delay    
+delay    = loop $ \o a -> (a, o)
+recur f  = loop (\x -> dup . f x)
 
 -- Recursive transform, similar to scanl
 -- Function have form (\fb new -> (fb, res))
-loopS :: (Float -> Float -> (Float, Float)) -> Signal -> Signal
-loopS op (Signal a) = Signal $ \s t i -> let 
+loop :: (Float -> Float -> (Float, Float)) -> Signal -> Signal
+loop op (Signal a) = Signal $ \s t i -> let 
     (sa,xa) = first downState $ a (upState s) t i
     xo      = readBuf sa
     (fb,xc) = xo `op` xa
@@ -213,8 +213,8 @@ test = mapM_ (putStrLn.toBars) $ runS sig inp
         -- one channel input
         inp = (fmap.fmap) (/ 10) $ concat $ replicate 4 $ transpose [[-10..10]]
                        
-        sig = lift2S (\a b -> a) (delayS $ inputS 0) (inputS 0)
-        -- sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
+        sig = lift2S (\a b -> a) (delay $ input 0) (input 0)
+        -- sig = (delay.delay.delay.delay.delay) (input 0)
 
 first  f (a,b)      = (f a, b)
 second f (a,b)      = (a, f b)
