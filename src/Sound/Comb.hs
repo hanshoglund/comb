@@ -104,8 +104,6 @@ callback sampleCount info_ flags_ count inp outp = do
         return Continue
 
 
--- forall s . (Semigroup s, Monoid s, Typeable s) => s -> Time -> [Float] -> (s, Float)
-
 
 --  A signal is a function of inputs and time over some local state
 --  Note that input/outputs may include global buffers
@@ -211,7 +209,7 @@ test :: IO ()
 test = mapM_ (putStrLn.toBars) $ runS sig inp
     where    
         -- one channel input
-        inp = (fmap.fmap) (/ 10) $ concat $ replicate 4 $ transpose [[-10..10]]
+        inp = (fmap.fmap) (/ 10) $ concat $ replicate 3 $ transpose [[-10..10]]
                        
         sig = lift2S (\a b -> a) (delay $ input 0) (input 0)
         -- sig = (delay.delay.delay.delay.delay) (input 0)
