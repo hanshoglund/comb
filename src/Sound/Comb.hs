@@ -111,9 +111,10 @@ callback sampleCount info_ flags_ count inp outp = do
 --  TODO strictness, turn networks on and off (stepping)
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
-type SignalState = [[Float]]
+type State  = ()
+
 newtype Signal = Signal { getSignal ::
-    (s ~ SignalState) => s -> Time -> [Float] -> (s, Float)
+    State -> Time -> [Float] -> (State, Float)
     }
 instance Num Signal where
     a + b = a `addS` b
@@ -156,11 +157,9 @@ lift2S op (Signal a) (Signal b) = Signal $ \s t i -> let
     -- Alternatively, we might run the state transformations in sequence
     -- Anyhow, state transformations should not interact, how to assure this?
 
-delay2S = delayS . delayS    
-delayS = loopS $ \o a -> (a, o)
-
-recurS :: (Float -> Float -> Float) -> Signal -> Signal
-recurS f = loopS (\x -> dup . f x)
+delay2S   = delayS . delayS    
+delayS    = loopS $ \o a -> (a, o)
+recurS f  = loopS (\x -> dup . f x)
 
 -- Recursive transform, similar to scanl
 -- Function have form (\old new -> res)
@@ -169,7 +168,7 @@ loopS op (Signal a) = Signal $ \s t i -> let
     (sa,xa) = a s t i
     xo      = undefined -- TODO from state
     (sc,xc) = xo `op` xa
-    in (sa <> {-sc-}mempty, xc)
+    in (sa <> {-sc-}mempty, xc) -- TODO store state
 
 -- |
 -- Run a signal starting at time 0 and default state, ignoring output state
@@ -177,7 +176,7 @@ loopS op (Signal a) = Signal $ \s t i -> let
 -- > runS signal inputs => output
 --
 runS :: Signal -> [[Float]] -> [Float]
-runS (Signal a) inputs = snd $ mapAccumL proc (mempty::SignalState) (zip [0..] inputs)
+runS (Signal a) inputs = snd $ mapAccumL proc (mempty::State) (zip [0..] inputs)
     where
         proc s (t, xs) = a s t xs
 
