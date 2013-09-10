@@ -65,7 +65,7 @@ input   :: Int -> Signal
 signal  :: Double -> Signal
 lift    :: (Double -> Double) -> Signal -> Signal
 lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
-loop    :: (Double -> Double -> (Double, Double)) -> Signal -> Signal
+loop    :: (Signal -> Signal -> (Signal,Signal)) -> Signal -> Signal
 delay   :: Signal -> Signal
 time        = Signal $ \s -> (s, fromIntegral (stateCount s) / stateRate s)
 input n     = Signal $ \s -> (s, stateInputs s !! n)
@@ -78,8 +78,10 @@ lift2 f a b = Signal $ \s -> let
     (sb, xb) = (getSignal b) sa
     in (sb, f xa xb)
     
-loop        = error "Not impl: loop"
-delay       = error "Not impl: delay"
+loop f s    = let
+    in Signal $ \s -> (s, 0)
+    
+delay       = loop $ \o n -> (n, o)
 
 runSignal :: Signal -> [[Double]] -> [Double]
 runSignal a inputs = snd $ mapAccumL proc def inputs
