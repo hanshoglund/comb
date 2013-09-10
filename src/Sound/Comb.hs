@@ -107,9 +107,10 @@ callback sampleCount info_ flags_ count inp outp = do
 --  TODO strictness, turn networks on and off (stepping)
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
+type SignalState = [[Float]]
 newtype Signal = Signal { getSignal ::
     -- forall s . (Semigroup s, Monoid s, Typeable s) => s -> Time -> [Float] -> (s, Float)
-    (s ~ [[Float]]) => s -> Time -> [Float] -> (s, Float)
+    (s ~ SignalState) => s -> Time -> [Float] -> (s, Float)
     }
 instance Num Signal where
     a + b = a `addS` b
@@ -152,8 +153,6 @@ lift2S op (Signal a) (Signal b) = Signal $ \s t i -> let
     -- Alternatively, we might run the state transformations in sequence
     -- Anyhow, state transformations should not interact, how to assure this?
 
--- biquad b0 a1 b1 a2 b2 x = recurS $ \y x ->
-    -- b0*x + b1*(delayS x) + b2*(delay2S x) - a1*y - a2*(delayS y)
 delay2S = delayS . delayS    
 delayS = loopS $ \o a -> (a, o)
 
@@ -169,33 +168,13 @@ loopS op (Signal a) = Signal $ \s t i -> let
     (sc,xc) = xo `op` xa
     in (sa <> {-sc-}mempty, xc)
 
-
-
-
-
-{-
--- Note that for non-input (non-reactive) signals, we might juss thift time
--- However to get properly shifted inputs, we need the state    
-delaySNR :: Signal -> Signal
-delaySNR (Signal f) = Signal $ \s t i -> f s (t-1) i
-
-delayS :: Signal -> Signal
-delayS (Signal f) = Signal $ \s t i -> let
-    in f (s ++ [i]) (t-1) (if length s < 1 then [0,0..] else (last s))
-    -- FIXME
--}
-    
-
--- mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
-
-
 -- |
 -- Run a signal starting at time 0 and default state, ignoring output state
 --
 -- > runS signal inputs => output
 --
 runS :: Signal -> [[Float]] -> [Float]
-runS (Signal a) inputs = snd $ mapAccumL proc (mempty::[[Float]]) (zip [0..] inputs)
+runS (Signal a) inputs = snd $ mapAccumL proc (mempty::SignalState) (zip [0..] inputs)
     where
         proc s (t, xs) = a s t xs
 
@@ -209,6 +188,19 @@ test = mapM_ (putStrLn.toBars) $ runS sig inp
         -- sig = (delayS.delayS.delayS.delayS.delayS) (inputS 0)
 
 
+
+
+
+
+-- mapAccumL :: (acc -> x -> (acc, y)) -> acc -> [x] -> (acc, [y])
+
+
+
+
+
+
+-- biquad b0 a1 b1 a2 b2 x = recurS $ \y x ->
+    -- b0*x + b1*(delayS x) + b2*(delay2S x) - a1*y - a2*(delayS y)
 
 second f (a,b) = (a, f b)
 cast' = fromJust . cast
