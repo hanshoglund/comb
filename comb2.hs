@@ -20,7 +20,7 @@ import Control.Applicative
 import Control.Monad
 import Data.List (mapAccumL)
 import Foreign.Storable
-import Data.List (transpose)
+import Data.List (transpose, unfoldr)
 import Data.Tree
 import Sound.PortAudio
 import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
@@ -57,7 +57,6 @@ split   (o,d) = ((o,d*2), (d,d*2))
 
 --  A signal is a function of inputs and time over some local state
 --  Note that input/outputs may include global buffers
---  TODO strictness, turn networks on and off (stepping)
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
 data State  = State {
@@ -89,6 +88,12 @@ data Signal
     | Output Int Signal
     -- only used for feedback for now
 
+instance Eq Signal where
+    (==) = error "No (==)"
+instance Ord Signal where
+    compare = error "No compare"
+    max = lift2 max
+    min = lift2 min
 instance Num Signal where
     (+) = lift2 (+)
     (*) = lift2 (*)    
@@ -149,9 +154,6 @@ both    = Lift2 (\_ x -> x)
 loop    = Loop
 delay   = Delay
 
-put :: Show a => a -> IO ()
-put = putStrLn . show
-
 -- Replace:
 --   * All loops with local input/outputs
 simplify :: Signal -> Signal
@@ -165,26 +167,34 @@ simplify = go new
         go g x = x                                     
         neg x = negate (x + 1)
 
+put :: Signal -> IO ()
+put a = mapM_ (putStrLn.toBars) $ take 60 $ run a
+
+run :: Signal -> [Double]
+run a = unfoldr (Just . fmap f . swap . step a) defState
+    where
+        f x = x { stateCount = stateCount x + 1 }
+
 -- Run a signal over a state
 -- Note that the signal is the first argument, which is usually applied once
 -- The resulting (State -> (State, Double)) function is then unfolded to yield the outputs
 -- Think of the repeated s application as 'run time'
-run :: Signal -> State -> (State, Double)
-run = go . simplify
+step :: Signal -> State -> (State, Double)
+step = go . simplify
     where
         go Time s           = (s, fromIntegral (stateCount s) / stateRate s) 
         go (Constant x) s   = (s, x)
  
         go (Lift f a) s     = let 
-            (sa, xa) = a `run` s 
+            (sa, xa) = a `step` s 
             in (sa, f xa)
         go (Lift2 f a b) s  = let
-            (sa, xa) = a `run` s
-            (sb, xb) = b `run` sa
+            (sa, xa) = a `step` s
+            (sb, xb) = b `step` sa
             in (sb, f xa xb)      
  
-        go (Input n) s      = (s, stateInputs s !! n)
-        go (Output n a) s   = first id $ a `run` s -- TODO modify s
+        go (Input n) s      = (s, stateInputs s !! n) -- TODO handle negative
+        go (Output n a) s   = first id $ a `step` s -- TODO modify s
 
 
 -- | From range (0,1) to range (-1,1)
@@ -210,6 +220,7 @@ toBars x = let n = round (toPos x * width) in
 tau                 = 2 * pi
 first  f (a,b)      = (f a, b)
 second f (a,b)      = (a, f b)
+swap (a,b)          = (b, a)
 cast'               = fromJust . cast
 fromJust (Just x)   = x
 dup x               = (x, x)
