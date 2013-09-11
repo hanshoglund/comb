@@ -78,8 +78,8 @@ data Signal
     | Constant Double
     | Lift (Double -> Double) Signal
     | Lift2 (Double -> Double -> Double) Signal Signal
-    | Loop (Signal -> Signal)
 
+    | Loop (Signal -> Signal)
     | Delay Signal
 
     | Input Int 
@@ -93,6 +93,7 @@ input   :: Int -> Signal
 signal  :: Double -> Signal
 lift    :: (Double -> Double) -> Signal -> Signal
 lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
+both    :: Signal -> Signal -> Signal -- run both, return second
 loop    :: (Signal -> Signal) -> Signal
 delay   :: Signal -> Signal
 time    = Time
@@ -100,6 +101,7 @@ input   = Input
 signal  = Constant
 lift    = Lift
 lift2   = Lift2
+both    = Lift2 (\_ x -> x)
 loop    = Loop
 delay   = Delay
 
@@ -134,11 +136,13 @@ putSignalTree = putStrLn . drawTree . signalTree
 simplify :: Signal -> Signal
 simplify = go new
     where
-        go g (Loop sf)      = Output (next g) $ go (skip g) $ sf $ Input (next g)
+        go g (Loop sf)      = Output (neg $ next g) $ go (skip g) $ sf $ Input (neg $ next g)
+        go g (Delay a)      = Output (neg $ next g) a `both` Input (neg $ next g)
         go g (Lift f a)     = Lift f (go g a)
         go g (Lift2 f a b)  = Lift2 f (go g1 a) (go g2 b) where (g1, g2) = split g
         -- Note: split is unnecessary if evaluation is sequential
-        go g x = x
+        go g x = x                                     
+        neg x = negate (x + 1)
 
 -- Run a signal over a state
 -- Note that the signal is the first argument, which is usually applied once
@@ -148,9 +152,8 @@ run :: Signal -> State -> (State, Double)
 run = go . simplify
     where
         go Time s           = (s, fromIntegral (stateCount s) / stateRate s) 
-        go (Input n) s      = (s, stateInputs s !! n)
-        go (Output n a) s   = first id $ a `run` s -- TODO modify s
         go (Constant x) s   = (s, x)
+ 
         go (Lift f a) s     = let 
             (sa, xa) = a `run` s 
             in (sa, f xa)
@@ -158,12 +161,9 @@ run = go . simplify
             (sa, xa) = a `run` s
             (sb, xb) = b `run` sa
             in (sb, f xa xb)      
-            
-        -- FIXME this must:
-        --   a) shift time (no problem)
-        --   b) shift input (how is it cached?)
-        -- go (Delay a) s      = (s, )
-
+ 
+        go (Input n) s      = (s, stateInputs s !! n)
+        go (Output n a) s   = first id $ a `run` s -- TODO modify s
 
 {-
 
