@@ -12,7 +12,7 @@ import Data.Semigroup
 import Data.Default
 import Data.Typeable
 import Data.Fixed
-import System.Random
+-- import System.Random
 import Data.Functor.Contravariant
 import Foreign.Ptr
 import Foreign.C.Types
@@ -45,6 +45,9 @@ genAll g = let
     (g2,x) = gen g
     in x : genAll g2
 
+skip = fst . gen
+next = snd . gen
+
 new           = (0,1)
 gen     (o,d) = ((o+d,d), o)
 split   (o,d) = ((o,d*2), (d,d*2))
@@ -73,11 +76,17 @@ defState = (def::State)
 data Signal
     = Time
     | Constant Double
-    | Input Int
     | Lift (Double -> Double) Signal
     | Lift2 (Double -> Double -> Double) Signal Signal
     | Loop (Signal -> Signal)
+
     | Delay Signal
+
+    | Input Int 
+    -- >= 0 means real (global) input
+    -- <  0 means local (feedback) input
+    | Output Int Signal
+    -- only used for feedback for now
 
 time    :: Signal
 input   :: Int -> Signal
@@ -94,15 +103,53 @@ lift2   = Lift2
 loop    = Loop
 delay   = Delay
 
+instance Num Signal where
+    (+) = lift2 (+)
+    (*) = lift2 (*)
+    negate        = (* (-1))
+    abs           = lift abs
+    signum        = lift signum
+    fromInteger x = signal (fromInteger x)
+instance Fractional Signal where
+    recip = lift recip
+    fromRational x = signal (fromRational x)
+
+
+
+signalTree :: Signal -> Tree String
+signalTree = go . simplify
+    where
+        go Time             = Node "Time" []
+        go (Constant x)     = Node (show x) []
+        go (Lift _ a)       = Node "f" [signalTree a]
+        go (Lift2 _ a b)    = Node "f" [signalTree a, signalTree b]
+        go (Input n)        = Node ("In: " ++ show n) []
+        go (Output n a)     = Node ("Out: " ++ show n) [signalTree a] 
+
+putSignalTree :: Signal -> IO ()
+putSignalTree = putStrLn . drawTree . signalTree
+
+-- Replace:
+--   * All loops with local input/outputs
+simplify :: Signal -> Signal
+simplify = go new
+    where
+        go g (Loop sf)      = Output (next g) $ go (skip g) $ sf $ Input (next g)
+        go g (Lift f a)     = Lift f (go g a)
+        go g (Lift2 f a b)  = Lift2 f (go g1 a) (go g2 b) where (g1, g2) = split g
+        -- Note: split is unnecessary if evaluation is sequential
+        go g x = x
+
 -- Run a signal over a state
 -- Note that the signal is the first argument, which is usually applied once
 -- The resulting (State -> (State, Double)) function is then unfolded to yield the outputs
 -- Think of the repeated s application as 'run time'
 run :: Signal -> State -> (State, Double)
-run = go 
+run = go . simplify
     where
         go Time s           = (s, fromIntegral (stateCount s) / stateRate s) 
         go (Input n) s      = (s, stateInputs s !! n)
+        go (Output n a) s   = first id $ a `run` s -- TODO modify s
         go (Constant x) s   = (s, x)
         go (Lift f a) s     = let 
             (sa, xa) = a `run` s 
@@ -218,9 +265,14 @@ cast'               = fromJust . cast
 fromJust (Just x)   = x
 dup x               = (x, x)
 
--- > compTimes n pred succ 0 = n
-compTimes :: Int -> (a -> a) -> (a -> a) -> (a -> a)
-compTimes n neg pos 
+
+-- | Compose stepper functions.
+-- 
+-- You should only use @steps f g@ when @f (g x) = x@.
+--
+-- > steps pred succ n a = toEnum (fromEnum a + n)
+steps :: (a -> a) -> (a -> a) -> Int -> a -> a
+steps neg pos n 
     | n <  0 = foldr (.) id (replicate (negate n) neg)
     | n >= 0 = foldr (.) id (replicate n pos)
 
