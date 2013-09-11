@@ -27,6 +27,31 @@ import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
 import Control.Concurrent (threadDelay)
 
 
+-- generate unique sets
+-- Laws:
+
+-- > gen new = [1..]
+-- > genAll a `merge` genAll b = genAll c   iff   (a,b) = split c
+-- > genAll A is distinct from genAll b
+
+type Gen a = (a,a) -- offset, diff
+
+new   :: Num a => Gen a
+gen   :: Num a => Gen a -> (Gen a, a)
+split :: Num a => Gen a -> (Gen a, Gen a)
+
+genAll :: Num a => Gen a -> [a]
+genAll g = let
+    (g2,x) = gen g
+    in x : genAll g2
+
+new           = (0,1)
+gen     (o,d) = ((o+d,d), o)
+split   (o,d) = ((o,d*2), (d,d*2))
+
+
+
+
 --  A signal is a function of inputs and time over some local state
 --  Note that input/outputs may include global buffers
 --  TODO strictness, turn networks on and off (stepping)
