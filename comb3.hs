@@ -1,6 +1,11 @@
 
 {-# LANGUAGE TypeSynonymInstances, FlexibleInstances #-}
 
+
+
+------------------------------
+
+
 type Signal = [Double]
 
 -- instance Eq Signal where
@@ -54,7 +59,7 @@ input _ = fmap (/ 10) [6,1,-2,3,5,-6,7,1,-2,6,4]
 signal  = repeat
 lift    = fmap
 lift2   = zipWith
-loop f  = f (loop f)
+loop f  = f (loop f) -- ordinary fixpoint
 delay   = (0 :)
 
 
