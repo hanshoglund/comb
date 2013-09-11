@@ -67,6 +67,7 @@ data State  = State {
         stateRate       :: Double           -- samples per second
     }
     deriving (Show)
+
 instance Default State where
     def = State 
         [] {-[]-} 0 10 
@@ -88,6 +89,49 @@ data Signal
     | Output Int Signal
     -- only used for feedback for now
 
+instance Num Signal where
+    (+) = lift2 (+)
+    (*) = lift2 (*)    
+    (-) = lift2 (-)
+    abs           = lift abs
+    signum        = lift signum
+    fromInteger x = signal (fromInteger x)
+instance Fractional Signal where
+    recip = lift recip
+    fromRational x = signal (fromRational x)
+instance Show Signal where
+    show = drawTree . signalTree
+instance Floating Signal where
+    pi = signal pi
+    exp = lift exp
+    sqrt = lift sqrt
+    log = lift log
+    (**) = lift2 (**)
+    logBase = lift2 logBase
+    sin = lift sin
+    tan = lift tan
+    cos = lift cos
+    asin = lift asin
+    atan = lift atan
+    acos = lift acos
+    sinh = lift sinh
+    tanh = lift tanh
+    cosh = lift cosh
+    asinh = lift asinh
+    atanh = lift atanh
+    acosh = lift acosh
+
+
+signalTree :: Signal -> Tree String
+signalTree = go . simplify
+    where
+        go Time             = Node "Time" []
+        go (Constant x)     = Node (show x) []
+        go (Lift _ a)       = Node "f" [signalTree a]
+        go (Lift2 _ a b)    = Node "f" [signalTree a, signalTree b]
+        go (Input n)        = Node ("In: " ++ show n) []
+        go (Output n a)     = Node ("Out: " ++ show n) [signalTree a] 
+
 time    :: Signal
 input   :: Int -> Signal
 signal  :: Double -> Signal
@@ -105,31 +149,8 @@ both    = Lift2 (\_ x -> x)
 loop    = Loop
 delay   = Delay
 
-instance Num Signal where
-    (+) = lift2 (+)
-    (*) = lift2 (*)
-    negate        = (* (-1))
-    abs           = lift abs
-    signum        = lift signum
-    fromInteger x = signal (fromInteger x)
-instance Fractional Signal where
-    recip = lift recip
-    fromRational x = signal (fromRational x)
-
-
-
-signalTree :: Signal -> Tree String
-signalTree = go . simplify
-    where
-        go Time             = Node "Time" []
-        go (Constant x)     = Node (show x) []
-        go (Lift _ a)       = Node "f" [signalTree a]
-        go (Lift2 _ a b)    = Node "f" [signalTree a, signalTree b]
-        go (Input n)        = Node ("In: " ++ show n) []
-        go (Output n a)     = Node ("Out: " ++ show n) [signalTree a] 
-
-putSignalTree :: Signal -> IO ()
-putSignalTree = putStrLn . drawTree . signalTree
+put :: Show a => a -> IO ()
+put = putStrLn . show
 
 -- Replace:
 --   * All loops with local input/outputs
