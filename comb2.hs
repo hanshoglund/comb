@@ -15,14 +15,16 @@ import Data.Typeable
 import Data.Fixed
 -- import System.Random
 import Data.Functor.Contravariant
-import Foreign.Ptr
+import Foreign hiding (new)
 import Foreign.C.Types
 import Control.Applicative
 import Control.Monad
 import Data.List (mapAccumL)
+import Foreign.Ptr
 import Foreign.Storable
 import Data.List (transpose, unfoldr)
-import Data.Tree
+import Data.Tree      
+import Sound.File.Sndfile
 import Sound.PortAudio
 import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
 import Control.Concurrent (threadDelay)
@@ -251,6 +253,32 @@ toBars x = let n = round (toPos x * width) in
     where 
         width = 80
 
+
+-- Sndfile I/O
+
+instance Buffer [] Double where
+    fromForeignPtr = error "fromForeignPtr"
+
+    toForeignPtr xs = do
+        p <- mallocBytes (sizeOf (undefined::Double) * length xs)
+        forM_ [0 .. length xs - 1] $ \n -> do
+            pokeElemOff p n (xs !! n)
+        fp <- newForeignPtr_ p
+        return (fp, 0, length xs)
+
+main = do                              
+    Sound.File.Sndfile.writeFile info "test.wav" buffer
+    putStrLn "Finished generating audio"
+    where              
+        info   = Info {
+                frames      = 44100,
+                samplerate  = 44100,
+                channels    = 1,
+                format      = (Format HeaderFormatWav SampleFormatDouble EndianCpu),
+                sections    = 1,
+                seekable    = True
+            }
+        buffer = take 44100 $! run (sin (time))
 
 
 tau                 = 2 * pi
