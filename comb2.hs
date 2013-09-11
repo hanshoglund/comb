@@ -61,56 +61,64 @@ data State  = State {
         stateInputs     :: [Double],        -- current input values
         -- stateBuses      :: [Signal],        -- current buses
         stateCount      :: Int,             -- processed samples
-        stateRate       :: Double,          -- samples per second
-
-        stateLocalBufs  :: [Double],        -- local buffers
-        stateLocalBuf   :: Int,             -- node of current local buffer
-        stateLocalBufInc :: Int             -- difference between left and right branch 
+        stateRate       :: Double           -- samples per second
     }
     deriving (Show)
 instance Default State where
     def = State 
         [] {-[]-} 0 10 
-        [] 0 1
 defState = (def::State)
     
--- instance Monoid State where
 
-readBuf  :: State -> Double
-writeBuf :: Double -> State -> State
-readBuf = undefined
-writeBuf = undefined
+data Signal
+    = Time
+    | Constant Double
+    | Input Int
+    | Lift (Double -> Double) Signal
+    | Lift2 (Double -> Double -> Double) Signal Signal
+    | Loop (Signal -> Signal)
+    | Delay Signal
 
-left :: State -> State
-right :: State -> State
-unleft :: State -> State
-unright :: State -> State
-left = id
-unleft = id
-right x = x { stateLocalBuf = stateLocalBuf x + stateLocalBufInc x }
-unright x = x { stateLocalBuf = stateLocalBuf x - stateLocalBufInc x }
+time    :: Signal
+input   :: Int -> Signal
+signal  :: Double -> Signal
+lift    :: (Double -> Double) -> Signal -> Signal
+lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
+loop    :: (Signal -> Signal) -> Signal
+delay   :: Signal -> Signal
+time    = Time
+input   = Input
+signal  = Constant
+lift    = Lift
+lift2   = Lift2
+loop    = Loop
+delay   = Delay
+
+-- Run a signal over a state
+-- Note that the signal is the first argument, which is usually applied once
+-- The resulting (State -> (State, Double)) function is then unfolded to yield the outputs
+-- Think of the repeated s application as 'run time'
+run :: Signal -> State -> (State, Double)
+run = go 
+    where
+        go Time s           = (s, fromIntegral (stateCount s) / stateRate s) 
+        go (Input n) s      = (s, stateInputs s !! n)
+        go (Constant x) s   = (s, x)
+        go (Lift f a) s     = let 
+            (sa, xa) = a `run` s 
+            in (sa, f xa)
+        go (Lift2 f a b) s  = let
+            (sa, xa) = a `run` s
+            (sb, xb) = b `run` sa
+            in (sb, f xa xb)      
+            
+        -- FIXME this must:
+        --   a) shift time (no problem)
+        --   b) shift input (how is it cached?)
+        -- go (Delay a) s      = (s, )
 
 
-down :: State -> State
-up   :: State -> State
-down x = right   $ x { stateLocalBufInc = stateLocalBufInc x * 2 }
-up   x = unright $ x { stateLocalBufInc = stateLocalBufInc x `div` 2 }
-
-move n = compTimes n unright right
-
-walkStateTree :: Tree State -> Tree State
-walkStateTree (Node x xs) = Node x (fmap2 down $ mapWithIndex (\n x -> x) xs)
-
-
-mapWithIndex f = zipWith f [0..]
-fmap2 = fmap . fmap
-    
-showStateNodes = putStrLn $ drawTree $ fmap (show . stateLocalBuf) $ 
-    Node defState [
-        Node (left $ down def) [], Node (right $ down def) []
-    ]
-
-
+{-
 
 
 newtype Signal = Signal { getSignal ::
@@ -141,15 +149,17 @@ lift f a    = Signal $ \s -> let
     (sa, xa) = (getSignal a) s 
     in (sa, f xa)
 lift2 f a b = Signal $ \s -> let
-    (sa, xa) = first unleft $ (getSignal a) (left s)
-    (sb, xb) = first unright $ (getSignal b) (right sa)
+    (sa, xa) = (getSignal a) s
+    (sb, xb) = (getSignal b) sa
     in (sb, f xa xb)
     
 loop f a = Signal $ \s -> let
     (sa, xa) = (getSignal a) s
-    xb       = readBuf s
+    -- xb       = readBuf s
+    xb       = 0
     (xc,xd)  = f xb xa
-    sc       = writeBuf xc sa
+    -- sc       = writeBuf xc sa
+    sc = sa
     in (sc, xd)
     
 delay       = loop $ \o n -> (n, o)
@@ -197,7 +207,8 @@ toBars x = let n = round (toPos x * width) in
         then replicate (width+1) ' ' ++ "|"
         else replicate n ' ' ++ "." ++ replicate (width-n) ' ' ++ "|"
     where
-        width = 80
+        width = 80               -}
+
 
 
 tau                 = 2 * pi
