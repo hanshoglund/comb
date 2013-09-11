@@ -1,8 +1,8 @@
 
-{-# LANGUAGE NoMonomorphismRestriction, 
+{-# LANGUAGE NoMonomorphismRestriction, BangPatterns, 
     RankNTypes, TypeOperators, DeriveFunctor, GADTs, MultiParamTypeClasses #-}
 
-module Sound.Comb -- (
+module Main -- (
 --    ) 
 where
 
@@ -219,19 +219,19 @@ run a = unfoldr (Just . fmap f . swap . step a) defState
 step :: Signal -> State -> (State, Double)
 step = go . simplify
     where
-        go Time s             = (s, fromIntegral (stateCount s) / stateRate s) 
-        go (Constant x) s     = (s, x)
+        go Time ~s             = (s, fromIntegral (stateCount s) / stateRate s) 
+        go (Constant x) ~s     = (s, x)
  
-        go (Lift _ f a) s     = let 
+        go (Lift _ f a) ~s     = let 
             (sa, xa) = a `step` s 
             in (sa, f xa)
-        go (Lift2 _ f a b) s  = let
+        go (Lift2 _ f a b) ~s  = let
             (sa, xa) = a `step` s
             (sb, xb) = b `step` sa
             in (sb, f xa xb)      
  
-        go (Input n) s      = (s, readInput n s) -- TODO handle negative
-        go (Output n a) s   = let 
+        go (Input n) ~s      = (s, readInput n s) -- TODO handle negative
+        go (Output n a) ~s   = let 
             (sa, xa) = a `step` s
             in (writeOutput n xa sa, xa)
 
@@ -278,7 +278,8 @@ main = do
                 sections    = 1,
                 seekable    = True
             }
-        buffer = take 44100 $! run (sin (time))
+        buffer = take 44100 $! run $! (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.2 + delayN 100 impulse
+        freq = time/4
 
 
 tau                 = 2 * pi
