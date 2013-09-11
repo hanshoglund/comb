@@ -77,7 +77,7 @@ data Signal
     = Time
     | Constant Double
     | Lift (Double -> Double) Signal
-    | Lift2 (Double -> Double -> Double) Signal Signal
+    | Lift2 (Double -> Double -> Double) Signal Signal
 
     | Loop (Signal -> Signal)
     | Delay Signal
@@ -159,7 +159,7 @@ delay   = Delay
 simplify :: Signal -> Signal
 simplify = go new
     where
-        go g (Loop sf)      = Output (neg $ next g) $ go (skip g) $ sf $ Input (neg $ next g)
+        go g (Loop sf)      = Output (neg $ next g) $ go (skip g) $ sf $ Input (neg $ next g)
         go g (Delay a)      = Output (neg $ next g) a `both` Input (neg $ next g)
         go g (Lift f a)     = Lift f (go g a)
         go g (Lift2 f a b)  = Lift2 f (go g1 a) (go g2 b) where (g1, g2) = split g
@@ -168,7 +168,7 @@ simplify = go new
         neg x = negate (x + 1)
 
 put :: Signal -> IO ()
-put a = mapM_ (putStrLn.toBars) $ take 60 $ run a
+put a = mapM_ (putStrLn.toBars) $ take 60 $ run a
 
 run :: Signal -> [Double]
 run a = unfoldr (Just . fmap f . swap . step a) defState
@@ -221,7 +221,7 @@ tau                 = 2 * pi
 first  f (a,b)      = (f a, b)
 second f (a,b)      = (a, f b)
 swap (a,b)          = (b, a)
-cast'               = fromJust . cast
+cast'               = fromJust . cast
 fromJust (Just x)   = x
 dup x               = (x, x)
 
