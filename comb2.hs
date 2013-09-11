@@ -156,8 +156,8 @@ input   :: Int -> Signal
 signal  :: Double -> Signal
 lift    :: (Double -> Double) -> Signal -> Signal
 lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
+former  :: Signal -> Signal -> Signal -- run both in given order, return first arg
 latter  :: Signal -> Signal -> Signal -- run both in given order, return second arg
-former  :: Signal -> Signal -> Signal -- run both in given order, return second arg
 loop    :: (Signal -> Signal) -> Signal
 delay   :: Signal -> Signal
 time    = Time
