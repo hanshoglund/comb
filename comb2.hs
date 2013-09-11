@@ -9,6 +9,7 @@ where
 import Data.IORef
 import Data.Int
 import Data.Semigroup
+import Data.Maybe
 import Data.Default
 import Data.Typeable
 import Data.Fixed
@@ -25,7 +26,8 @@ import Data.Tree
 import Sound.PortAudio
 import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
 import Control.Concurrent (threadDelay)
-
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 -- generate unique sets
 -- Laws:
@@ -60,8 +62,8 @@ split   (o,d) = ((o,d*2), (d,d*2))
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
 data State  = State {
-        stateInputs     :: [Double],        -- current input values
-        -- stateBuses      :: [Signal],        -- current buses
+        stateInputs     :: Map Int Double,  -- current input values (index [0,1..])
+        stateBuses      :: Map Int Double,  -- current input values (index [-1,-2..])
         stateCount      :: Int,             -- processed samples
         stateRate       :: Double           -- samples per second
     }
@@ -69,9 +71,21 @@ data State  = State {
 
 instance Default State where
     def = State 
-        [] {-[]-} 0 10 
-defState = (def::State)
+        mempty mempty 0 10 
+
+defState :: State
+defState = def
     
+readInput :: Int -> State -> Double 
+readInput n s = fromMaybe 0 $ Map.lookup n2 m
+    where
+        (n2, m) = if n > 0 then (n, stateInputs s) else (negate $ n+1, stateBuses s)
+
+writeOutput :: Int -> Double -> State -> State 
+writeOutput n x s = s { stateBuses = Map.insert n2 x m } 
+    where
+        (n2, m) = (negate $ n+1, stateBuses s)
+
 
 data Signal
     = Time
@@ -156,8 +170,16 @@ both    = Lift2 "right" (\_ x -> x)
 loop    = Loop
 delay   = Delay
 
-delayn 0 = id
-delayn n = delay . delayn (n - 1)
+delayN :: Int -> Signal -> Signal
+delayN 0 = id
+delayN n = delay . delayN (n - 1)
+
+delay2 :: Signal -> Signal
+delay2 = delayN 2
+
+biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
+biquad b0 b1 b2 a1 a2 x = loop $ \y -> b0*x + b1*delay x + b2*delay2 x 
+    - a1*delay y - a2*delay2 y
 
 -- Replace:
 --   * All loops with local input/outputs
@@ -165,7 +187,7 @@ simplify :: Signal -> Signal
 simplify = go new
     where
         go g (Loop sf)        = Output (neg $ next g) $ go (skip g) $ sf $ Input (neg $ next g)
-        go g (Delay a)        = Output (neg $ next g) a `both` Input (neg $ next g)
+        go g (Delay a)        = Output (neg $ next g) (go (skip g) a) `both` Input (neg $ next g)
         go g (Lift n f a)     = Lift n f (go g a)
         go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = split g
         -- Note: split is unnecessary if evaluation is sequential
@@ -198,9 +220,10 @@ step = go . simplify
             (sb, xb) = b `step` sa
             in (sb, f xa xb)      
  
-        go (Input n) s      = (s, stateInputs s !! n) -- TODO handle negative
-        go (Output n a) s   = first id $ a `step` s -- TODO modify s
-
+        go (Input n) s      = (s, readInput n s) -- TODO handle negative
+        go (Output n a) s   = let 
+            (sa, xa) = a `step` s
+            in (writeOutput n xa sa, xa)
 
 -- | From range (0,1) to range (-1,1)
 toFull :: Num a => a -> a
@@ -227,7 +250,6 @@ first  f (a,b)      = (f a, b)
 second f (a,b)      = (a, f b)
 swap (a,b)          = (b, a)
 cast'               = fromJust . cast
-fromJust (Just x)   = x
 dup x               = (x, x)
 
 
