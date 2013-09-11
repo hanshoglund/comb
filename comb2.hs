@@ -144,19 +144,20 @@ instance Floating Signal where
 signalTree :: Signal -> Tree String
 signalTree = go . simplify
     where
-        go Time             = Node "Time" []
+        go Time             = Node "time" []
         go (Constant x)     = Node (show x) []
         go (Lift n _ a)     = Node n [signalTree a]
         go (Lift2 n _ a b)  = Node n [signalTree a, signalTree b]
-        go (Input n)        = Node ("In: " ++ show n) []
-        go (Output n a)     = Node ("Out: " ++ show n) [signalTree a] 
+        go (Input n)        = Node ("input " ++ show n) []
+        go (Output n a)     = Node ("output " ++ show n) [signalTree a] 
 
 time    :: Signal
 input   :: Int -> Signal
 signal  :: Double -> Signal
 lift    :: (Double -> Double) -> Signal -> Signal
 lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
-both    :: Signal -> Signal -> Signal -- run both, return second
+latter  :: Signal -> Signal -> Signal -- run both in given order, return second arg
+former  :: Signal -> Signal -> Signal -- run both in given order, return second arg
 loop    :: (Signal -> Signal) -> Signal
 delay   :: Signal -> Signal
 time    = Time
@@ -166,9 +167,12 @@ lift    = Lift "f"
 lift2   = Lift2 "f"
 lift'   = Lift
 lift2'  = Lift2
-both    = Lift2 "right" (\_ x -> x)
+latter  = Lift2 "latter" (\_ x -> x)
+former  = Lift2 "former" (\x _ -> x)
 loop    = Loop
 delay   = Delay
+
+impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 
 delayN :: Int -> Signal -> Signal
 delayN 0 = id
@@ -187,7 +191,11 @@ simplify :: Signal -> Signal
 simplify = go new
     where
         go g (Loop sf)        = Output (neg $ next g) $ go (skip g) $ sf $ Input (neg $ next g)
-        go g (Delay a)        = Output (neg $ next g) (go (skip g) a) `both` Input (neg $ next g)
+        go g (Delay a)        = inp `former` out
+            where
+                out = Output (neg $ next g) (go (skip g) a)
+                inp = Input (neg $ next g)
+                
         go g (Lift n f a)     = Lift n f (go g a)
         go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = split g
         -- Note: split is unnecessary if evaluation is sequential
