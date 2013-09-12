@@ -28,8 +28,13 @@ import Sound.File.Sndfile
 import Sound.PortAudio
 import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
 import Control.Concurrent (threadDelay)
+
 import Data.Map (Map)
 import qualified Data.Map as Map
+
+import Data.Vector.Unboxed (Vector, MVector)
+import qualified Data.Vector.Unboxed as Vector
+
 
 -- generate unique sets
 -- Laws:
@@ -65,7 +70,7 @@ split   (o,d) = ((o,d*2), (d,d*2))
 type Time   = Int
 data State  = State {
         stateInputs     :: Map Int Double,  -- current input values (index [0,1..])
-        stateBuses      :: Map Int Double,  -- current input values (index [-1,-2..])
+        stateBuses      :: Map Int Double,  -- current bus values (index [-1,-2..])
         stateCount      :: Int,             -- processed samples
         stateRate       :: Double           -- samples per second
     }
@@ -73,7 +78,7 @@ data State  = State {
 
 instance Default State where
     def = State 
-        mempty mempty 0 10 
+        mempty mempty 0 44100 
 
 defState :: State
 defState = def
@@ -207,8 +212,13 @@ simplify = go new
 put :: Signal -> IO ()
 put a = mapM_ (putStrLn.toBars) $ take 60 $ run a
 
-run :: Signal -> [Double]
-run a = unfoldr (Just . fmap f . swap . step a) defState
+run :: Signal -> [Double]                               
+run a = unfoldr (runBase a) defState
+
+runVec :: Int -> Signal -> Vector Double                               
+runVec n a = Vector.unfoldrN n (runBase a) defState
+
+runBase a = Just . fmap f . swap . step a
     where
         f x = x { stateCount = stateCount x + 1 }
 
@@ -219,19 +229,19 @@ run a = unfoldr (Just . fmap f . swap . step a) defState
 step :: Signal -> State -> (State, Double)
 step = go . simplify
     where
-        go Time ~s             = (s, fromIntegral (stateCount s) / stateRate s) 
-        go (Constant x) ~s     = (s, x)
+        go Time !s             = (s, fromIntegral (stateCount s) / stateRate s) 
+        go (Constant x) !s     = (s, x)
  
-        go (Lift _ f a) ~s     = let 
+        go (Lift _ f a) !s     = let 
             (sa, xa) = a `step` s 
             in (sa, f xa)
-        go (Lift2 _ f a b) ~s  = let
+        go (Lift2 _ f a b) !s  = let
             (sa, xa) = a `step` s
             (sb, xb) = b `step` sa
             in (sb, f xa xb)      
  
-        go (Input n) ~s      = (s, readInput n s) -- TODO handle negative
-        go (Output n a) ~s   = let 
+        go (Input n) !s      = (s, readInput n s) -- TODO handle negative
+        go (Output n a) !s   = let 
             (sa, xa) = a `step` s
             in (writeOutput n xa sa, xa)
 
@@ -256,30 +266,59 @@ toBars x = let n = round (toPos x * width) in
 
 -- Sndfile I/O
 
+instance Buffer Vector Double where
+    fromForeignPtr = error "fromForeignPtr"
+
+    toForeignPtr !xs = do
+        let len = Vector.length xs
+        p <- mallocBytes (sizeOf (undefined::Double) * len)
+        forM_ [0 .. len - 1] $ \n -> do
+            pokeElemOff p n ((Vector.!) xs n)
+            return ()
+        fp <- newForeignPtr_ p
+        return (fp, 0, len)
+
+
+
 instance Buffer [] Double where
     fromForeignPtr = error "fromForeignPtr"
 
-    toForeignPtr xs = do
-        p <- mallocBytes (sizeOf (undefined::Double) * length xs)
-        forM_ [0 .. length xs - 1] $ \n -> do
+    toForeignPtr !xs = do
+        let len = length xs
+        p <- mallocBytes (sizeOf (undefined::Double) * len)
+        forM_ [0 .. len - 1] $ \n -> do
             pokeElemOff p n (xs !! n)
         fp <- newForeignPtr_ p
-        return (fp, 0, length xs)
+        return (fp, 0, len)
 
 main = do                              
     Sound.File.Sndfile.writeFile info "test.wav" buffer
     putStrLn "Finished generating audio"
     where              
         info   = Info {
-                frames      = 44100,
-                samplerate  = 44100,
+                frames      = numSampls,
+                samplerate  = sr,
                 channels    = 1,
                 format      = (Format HeaderFormatWav SampleFormatDouble EndianCpu),
                 sections    = 1,
                 seekable    = True
             }
-        buffer = take 44100 $! run $! (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.2 + delayN 100 impulse
-        freq = time/4
+        -- buffer = take numSampls $! run $! sig
+        buffer = runVec numSampls $! sig
+
+major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.05
+        
+sig = major freq + major (freq*1.5) + major (freq*(4/5)) + 
+    major freq + major (freq*1.5) + major (freq*(4/5)) + 
+    major freq + major (freq*1.5) + major (freq*(4/5)) + 
+    delayN 1 impulse
+
+freq = time*440            
+numSampls = sr * secs
+secs = 10
+sr   = 44100 -- TODO see stateRate above
+
+
 
 
 tau                 = 2 * pi
