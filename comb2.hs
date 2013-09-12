@@ -184,6 +184,10 @@ delay n = delay1 . delay (n - 1)
 
 impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 
+-- Goes from (0-tau) n times per second.
+-- Suitable for feeding a sine oscillator.
+line :: Double -> Signal
+line n = time*tau*signal n
 
 biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
 biquad b0 b1 b2 a1 a2 x = loop $ \y -> b0*x + b1*delay 1 x + b2*delay 2 x 
@@ -364,10 +368,12 @@ main = do
 
 
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
-        
-sig = delay 10 (sum $ fmap (\x -> major $ freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
 
-freq = time*440            
+-- sig = sin $ line freq
+sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+
+freq = 440
+           
 numSampls = sr * secs
 secs = 10
 sr   = 44100 -- TODO see stateRate above
