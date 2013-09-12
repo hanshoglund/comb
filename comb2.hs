@@ -319,23 +319,29 @@ instance Buffer [] Double where
         fp <- newForeignPtr_ p
         return (fp, 0, len)
 
-main = do                              
-    Sound.File.Sndfile.writeFile info "test.wav" buffer
-    putStrLn "Finished generating audio"
-    where              
-        info   = Info {
-                frames      = numSampls,
-                samplerate  = sr,
-                channels    = 1,
-                format      = Format 
-                                HeaderFormatWav 
-                                SampleFormatDouble 
-                                EndianCpu,
-                sections    = 1,
-                seekable    = True
-            }
-        -- buffer = take numSampls $! run $! sig
-        buffer = runVec numSampls $! sig
+writeSignal :: FilePath -> Signal -> IO ()
+writeSignal path a = do                              
+    let buffer = runVec numSampls $! a
+    Sound.File.Sndfile.writeFile info path buffer
+    return ()
+        where              
+            info   = Info {
+                    frames      = numSampls,
+                    samplerate  = sr,
+                    channels    = 1,
+                    format      = Format 
+                                    HeaderFormatWav 
+                                    SampleFormatDouble 
+                                    EndianCpu,
+                    sections    = 1,
+                    seekable    = True
+                }
+
+main :: IO ()
+main = do
+    writeSignal "test.wav" sig 
+    putStrLn "Finished"
+
 
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
         
