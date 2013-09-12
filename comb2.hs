@@ -218,16 +218,25 @@ run a = unfoldr (runBase a) defState
 runVec :: Int -> Signal -> Vector Double                               
 runVec n a = Vector.unfoldrN n (runBase a) defState
 
-runBase a = Just . fmap f . swap . step a
-    where
-        f x = x { stateCount = stateCount x + 1 }
+-- runBase :: Signal -> State -> Maybe (Double, State)
+-- runBase a x = (Just . fmap incState . swap . step a) x
+--     where
+--         incState x = x { stateCount = stateCount x + 1 }
 
--- Run a signal over a state
+runBase :: Signal -> State -> Maybe (Double, State)
+runBase a = (Just . fmap incState . swap . step a2)
+    where                                                
+        !a2        = simplify a
+        incState x = x { stateCount = stateCount x + 1 }
+
+-- Run a signal over a state        
+-- Warning: only works on simplified signals.
+--
 -- Note that the signal is the first argument, which is usually applied once
 -- The resulting (State -> (State, Double)) function is then unfolded to yield the outputs
 -- Think of the repeated s application as 'run time'
 step :: Signal -> State -> (State, Double)
-step = go . simplify
+step = go
     where
         go Time !s             = (s, fromIntegral (stateCount s) / stateRate s) 
         go (Constant x) !s     = (s, x)
@@ -244,6 +253,7 @@ step = go . simplify
         go (Output n a) !s   = let 
             (sa, xa) = a `step` s
             in (writeOutput n xa sa, xa)
+        go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
 
 -- | From range (0,1) to range (-1,1)
 toFull :: Num a => a -> a
@@ -308,14 +318,11 @@ main = do
 
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.05
         
-sig = major freq + major (freq*1.5) + major (freq*(4/5)) + 
-    major freq + major (freq*1.5) + major (freq*(4/5)) + 
-    major freq + major (freq*1.5) + major (freq*(4/5)) + 
-    delayN 1 impulse
+sig = delayN 0 (major freq + major (freq*1.5) + major (freq*(4/5)))
 
 freq = time*440            
 numSampls = sr * secs
-secs = 10
+secs = 1
 sr   = 44100 -- TODO see stateRate above
 
 
