@@ -246,7 +246,7 @@ step = go
             in (sa, f xa)
         go (Lift2 _ f a b) !s  = {-# SCC "lift2" #-}    let
             (!sa, !xa) = a `step` s
-            (!sb, !xb) = b `step` sa
+            (!sb, !xb) = b `step` {-sa-}s  --FIXME
             in (sb, f xa xb)      
  
         go (Input n) !s      = {-# SCC "input" #-}      (s, readInput n s)
