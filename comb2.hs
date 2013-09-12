@@ -161,7 +161,7 @@ lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
 former  :: Signal -> Signal -> Signal -- run both in given order, return first arg
 latter  :: Signal -> Signal -> Signal -- run both in given order, return second arg
 loop    :: (Signal -> Signal) -> Signal
-delay   :: Signal -> Signal
+delay :: Int -> Signal -> Signal
 time    = Time
 input   = Input
 signal  = Constant
@@ -172,20 +172,17 @@ lift2'  = Lift2
 latter  = Lift2 "latter" (\_ x -> x)
 former  = Lift2 "former" (\x _ -> x)
 loop    = Loop
-delay   = Delay
+delay 0 = id
+delay n = delay1 . delay (n - 1)
+    where
+        delay1 = Delay
 
 impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 
-delayN :: Int -> Signal -> Signal
-delayN 0 = id
-delayN n = delay . delayN (n - 1)
-
-delay2 :: Signal -> Signal
-delay2 = delayN 2
 
 biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
-biquad b0 b1 b2 a1 a2 x = loop $ \y -> b0*x + b1*delay x + b2*delay2 x 
-    - a1*delay y - a2*delay2 y
+biquad b0 b1 b2 a1 a2 x = loop $ \y -> b0*x + b1*delay 1 x + b2*delay 2 x 
+    - a1*delay 1 y - a2*delay 2 y
 
 -- |
 -- Recursively remove signal constructors not handled by 'step'.
@@ -363,7 +360,7 @@ main = do
 
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
         
-sig = delayN 10 (sum $ fmap (\x -> major $ freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+sig = delay 10 (sum $ fmap (\x -> major $ freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
 
 freq = time*440            
 numSampls = sr * secs
