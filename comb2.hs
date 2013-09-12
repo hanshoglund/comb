@@ -1,8 +1,7 @@
 
 {-# LANGUAGE NoMonomorphismRestriction, BangPatterns, MultiParamTypeClasses #-}
 
-module Main -- (
---    ) 
+module Main
 where
 
 import Data.Int
@@ -14,6 +13,7 @@ import Data.List (mapAccumL)
 import Data.List (transpose, unfoldr)
 import Data.Tree      
 import Sound.File.Sndfile
+
 -- import Sound.PortAudio
 import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
 import Control.Concurrent (threadDelay)
@@ -25,7 +25,8 @@ import Data.Vector.Unboxed (Vector, MVector)
 import qualified Data.Vector.Unboxed as Vector
 
 
--- generate unique sets
+
+-- Generate unique sets
 -- Laws:
 
 -- > gen new = [1..]
@@ -38,17 +39,22 @@ new   :: Num a => Gen a
 gen   :: Num a => Gen a -> (Gen a, a)
 split :: Num a => Gen a -> (Gen a, Gen a)
 
+
+new           = (0,1)
+gen     (o,d) = ((o+d,d), o)
+split   (o,d) = ((o,d*2), (d,d*2))
+
+
+next :: Num a => Gen a -> a
+skip :: Num a => Gen a -> Gen a
+next = snd . gen
+skip = fst . gen
+
 genAll :: Num a => Gen a -> [a]
 genAll g = let
     (g2,x) = gen g
     in x : genAll g2
 
-skip = fst . gen
-next = snd . gen
-
-new           = (0,1)
-gen     (o,d) = ((o+d,d), o)
-split   (o,d) = ((o,d*2), (d,d*2))
 
 
 
@@ -91,11 +97,13 @@ data Signal
     | Loop (Signal -> Signal)
     | Delay Signal
 
-    | Input Int 
     -- >= 0 means real (global) input
     -- <  0 means local (feedback) input
-    | Output Int Signal
+
+    | Input Int 
+
     -- only used for feedback for now
+    | Output Int Signal
 
 instance Eq Signal where
     (==) = error "No (==)"
@@ -180,21 +188,36 @@ biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
 biquad b0 b1 b2 a1 a2 x = loop $ \y -> b0*x + b1*delay x + b2*delay2 x 
     - a1*delay y - a2*delay2 y
 
--- Replace:
+-- |
+-- Recursively remove signal constructors not handled by 'step'.
+-- 
+-- Currently, it replaces:
+--
 --   * All loops with local input/outputs
+--   * All delays with local input/output pair
+--
 simplify :: Signal -> Signal
 simplify = go new
     where
-        go g (Loop sf)        = Output (neg $ next g) $ go (skip g) $ sf $ Input (neg $ next g)
+        go g (Loop f)        = out $ go h (f inp)
+            where                     
+                out x = Output i $ x
+                inp   = Input i
+                i     = neg $ next g
+                h     = skip g
         go g (Delay a)        = inp `former` out
             where
-                out = Output (neg $ next g) (go (skip g) a)
-                inp = Input (neg $ next g)
+                out = Output i (go h a)
+                inp = Input i
+                i   = neg $ next g
+                h   = skip g
                 
         go g (Lift n f a)     = Lift n f (go g a)
         go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = split g
         -- Note: split is unnecessary if evaluation is sequential
+
         go g x = x                                     
+
         neg x = negate (x + 1)
 
 put :: Signal -> IO ()
@@ -217,12 +240,13 @@ runBase a = (Just . fmap incState . swap . step a2)
         !a2        = simplify a
         incState x = x { stateCount = stateCount x + 1 }
 
--- Run a signal over a state        
--- Warning: only works on simplified signals.
+-- |
+-- Run a signal over a state. Only works on simplified signals.
 --
--- Note that the signal is the first argument, which is usually applied once
--- The resulting (State -> (State, Double)) function is then unfolded to yield the outputs
--- Think of the repeated s application as 'run time'
+-- Note that the signal is the first argument, which is usually applied once The resulting
+-- function is then unfolded to yield the outputs. We might think of the repeated s
+-- application as 'run time'
+--
 step :: Signal -> State -> (State, Double)
 step = go
     where
@@ -242,6 +266,10 @@ step = go
             (sa, xa) = a `step` s
             in (writeOutput n xa sa, xa)
         go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
+
+
+
+
 
 -- | From range (0,1) to range (-1,1)
 toFull :: Num a => a -> a
