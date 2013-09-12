@@ -1,31 +1,20 @@
 
-{-# LANGUAGE NoMonomorphismRestriction, BangPatterns, 
-    RankNTypes, TypeOperators, DeriveFunctor, GADTs, MultiParamTypeClasses #-}
+{-# LANGUAGE NoMonomorphismRestriction, BangPatterns, MultiParamTypeClasses #-}
 
 module Main -- (
 --    ) 
 where
 
-import Data.IORef
 import Data.Int
-import Data.Semigroup
+import Data.Monoid
 import Data.Maybe
-import Data.Default
-import Data.Typeable
-import Data.Fixed
--- import System.Random
-import Data.Functor.Contravariant
 import Foreign hiding (new)
-import Foreign.C.Types
-import Control.Applicative
-import Control.Monad
+import Control.Monad (forM_)
 import Data.List (mapAccumL)
-import Foreign.Ptr
-import Foreign.Storable
 import Data.List (transpose, unfoldr)
 import Data.Tree      
 import Sound.File.Sndfile
-import Sound.PortAudio
+-- import Sound.PortAudio
 import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
 import Control.Concurrent (threadDelay)
 
@@ -76,12 +65,11 @@ data State  = State {
     }
     deriving (Show)
 
-instance Default State where
-    def = State 
-        mempty mempty 0 44100 
+-- instance Default State where
+    -- def = State mempty mempty 0 44100 
 
 defState :: State
-defState = def
+defState = State mempty mempty 0 44100
     
 readInput :: Int -> State -> Double 
 readInput n s = fromMaybe 0 $ Map.lookup n2 m
@@ -264,8 +252,11 @@ toPos  :: Fractional a => a -> a
 toPos x  = (x+1)/2
 
 
+-- Could be more general if not due to MonoMorph..R
+-- toBars :: RealFrac a => a -> String
+
 -- | View as bars if in range (-1,1)
-toBars :: RealFrac a => a -> String
+toBars :: Double -> String
 toBars x = let n = round (toPos x * width) in
     if n > width || n < 0
         then replicate (width+1) ' ' ++ "|"
@@ -332,7 +323,6 @@ tau                 = 2 * pi
 first  f (a,b)      = (f a, b)
 second f (a,b)      = (a, f b)
 swap (a,b)          = (b, a)
-cast'               = fromJust . cast
 dup x               = (x, x)
 
 
