@@ -236,7 +236,7 @@ runVec n a = Vector.unfoldrN n (runBase a) defState
 runBase :: Signal -> State -> Maybe (Double, State)
 runBase a = Just . fmap incState . swap . step a2
     where                                                
-        !a2        = simplify a
+        !a2        = (optimize . simplify) a
         incState x = x { stateCount = stateCount x + 1 }
 
 -- |
@@ -257,8 +257,9 @@ step = go
             in (sa, f xa)
         go (Lift2 _ f a b) !s  = {-# SCC "lift2" #-}    let
             (!sa, !xa) = a `step` s
-            (!sb, !xb) = b `step` {-sa-}s  --FIXME
+            (!sb, !xb) = b `step` sa 
             in (sb, f xa xb)      
+            -- TODO could be more parallel with non-sequential state
  
         go (Input n) !s      = {-# SCC "input" #-}      (s, readInput n s)
         go (Output n a) !s   = {-# SCC "output" #-}     let 
@@ -267,6 +268,23 @@ step = go
         go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
 
 
+optimize :: Signal -> Signal
+optimize = go
+    where
+        go (Lift2 "(*)" _ (Constant 0) b) = 0
+        go (Lift2 "(*)" _ a (Constant 0)) = 0
+        go (Lift2 "(*)" _ (Constant 1) b) = b
+        go (Lift2 "(*)" _ a (Constant 1)) = a
+
+        go (Lift2 "(+)" _ (Constant 0) b) = b
+        go (Lift2 "(+)" _ a (Constant 0)) = a
+        go (Lift2 "(-)" _ (Constant 0) b) = b
+        go (Lift2 "(-)" _ a (Constant 0)) = a
+
+        go (Lift2 "(/)" _ (Constant 0) a) = 0
+        go (Lift2 "(/)" _ a (Constant 0)) = error "optimize: Division by zero"
+
+        go a = a
 
 
 
