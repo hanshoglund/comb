@@ -63,8 +63,11 @@ genAll g = let
 --  TODO higher-order, signals of signals (switching)
 type Time   = Int
 data State  = State {
-        stateInputs     :: Map Int Double,  -- current input values (index [0,1..])
-        stateBuses      :: Map Int Double,  -- current bus values (index [-1,-2..])
+        -- current input values (index [0,1..])
+        stateInputs     :: Map Int Double,
+
+        -- current bus values (index [-1,-2..])
+        stateBuses      :: Map Int Double,
         stateCount      :: Int,             -- processed samples
         stateRate       :: Double           -- samples per second
     }
@@ -75,16 +78,18 @@ data State  = State {
 
 defState :: State
 defState = State mempty mempty 0 44100
-    
+
+-- channel state    
 readInput :: Int -> State -> Double 
 readInput n s = fromMaybe 0 $ Map.lookup n2 m
     where
         (n2, m) = if n > 0 then (n, stateInputs s) else (negate $ n+1, stateBuses s)
 
-writeOutput :: Int -> Double -> State -> State 
-writeOutput n x s = s { stateBuses = Map.insert n2 x m } 
+-- delay channel value state
+writeOutput :: Int -> Int -> Double -> State -> State 
+writeOutput n c x s = s { stateBuses = Map.insert n2 x m } 
     where
-        (n2, m) = (negate $ n+1, stateBuses s)
+        (n2, m) = (negate $ c+1, stateBuses s)
 
 
 data Signal
@@ -258,10 +263,10 @@ step = go
             in (sb, f xa xb)      
             -- TODO could be more parallel with non-sequential state
  
-        go (Input n) !s      = {-# SCC "input" #-}      (s, readInput n s)
-        go (Output n a) !s   = {-# SCC "output" #-}     let 
+        go (Input c) !s      = {-# SCC "input" #-}      (s, readInput c s)
+        go (Output c a) !s   = {-# SCC "output" #-}     let 
             (sa, xa) = a `step` s
-            in (writeOutput n xa sa, xa)
+            in (writeOutput 1 c xa sa, xa)
         go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
 
 
