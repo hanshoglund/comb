@@ -238,19 +238,19 @@ runBase a = (Just . fmap incState . swap . step a2)
 step :: Signal -> State -> (State, Double)
 step = go
     where
-        go Time !s             = (s, fromIntegral (stateCount s) / stateRate s) 
-        go (Constant x) !s     = (s, x)
+        go Time !s             = {-# SCC "time" #-}     (s, fromIntegral (stateCount s) / stateRate s) 
+        go (Constant x) !s     = {-# SCC "constant" #-} (s, x)
  
-        go (Lift _ f a) !s     = let 
-            (sa, xa) = a `step` s 
+        go (Lift _ f a) !s     = {-# SCC "lift" #-}     let 
+            (!sa, !xa) = a `step` s 
             in (sa, f xa)
-        go (Lift2 _ f a b) !s  = let
-            (sa, xa) = a `step` s
-            (sb, xb) = b `step` sa
+        go (Lift2 _ f a b) !s  = {-# SCC "lift2" #-}    let
+            (!sa, !xa) = a `step` s
+            (!sb, !xb) = b `step` sa
             in (sb, f xa xb)      
  
-        go (Input n) !s      = (s, readInput n s) -- TODO handle negative
-        go (Output n a) !s   = let 
+        go (Input n) !s      = {-# SCC "input" #-}      (s, readInput n s)
+        go (Output n a) !s   = {-# SCC "output" #-}     let 
             (sa, xa) = a `step` s
             in (writeOutput n xa sa, xa)
         go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
@@ -316,13 +316,13 @@ main = do
         -- buffer = take numSampls $! run $! sig
         buffer = runVec numSampls $! sig
 
-major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.05
+major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
         
-sig = delayN 0 (major freq + major (freq*1.5) + major (freq*(4/5)))
+sig = delayN 10 (sum $ fmap (\x -> major $ freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
 
 freq = time*440            
 numSampls = sr * secs
-secs = 1
+secs = 10
 sr   = 44100 -- TODO see stateRate above
 
 
