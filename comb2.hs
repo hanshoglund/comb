@@ -9,8 +9,7 @@ import Data.Monoid
 import Data.Maybe
 import Foreign hiding (new)
 import Control.Monad (forM_)
-import Data.List (mapAccumL)
-import Data.List (transpose, unfoldr)
+import Data.List (mapAccumL, transpose, unfoldr)
 import Data.Tree      
 import Sound.File.Sndfile
 
@@ -201,7 +200,7 @@ simplify = go new
     where
         go g (Loop f)        = out $ go h (f inp)
             where                     
-                out x = Output i $ x
+                out   = Output i
                 inp   = Input i
                 i     = neg $ next g
                 h     = skip g
@@ -235,7 +234,7 @@ runVec n a = Vector.unfoldrN n (runBase a) defState
 --         incState x = x { stateCount = stateCount x + 1 }
 
 runBase :: Signal -> State -> Maybe (Double, State)
-runBase a = (Just . fmap incState . swap . step a2)
+runBase a = Just . fmap incState . swap . step a2
     where                                                
         !a2        = simplify a
         incState x = x { stateCount = stateCount x + 1 }
@@ -315,7 +314,7 @@ instance Buffer [] Double where
     toForeignPtr !xs = do
         let len = length xs
         p <- mallocBytes (sizeOf (undefined::Double) * len)
-        forM_ [0 .. len - 1] $ \n -> do
+        forM_ [0 .. len - 1] $ \n ->
             pokeElemOff p n (xs !! n)
         fp <- newForeignPtr_ p
         return (fp, 0, len)
@@ -328,7 +327,10 @@ main = do
                 frames      = numSampls,
                 samplerate  = sr,
                 channels    = 1,
-                format      = (Format HeaderFormatWav SampleFormatDouble EndianCpu),
+                format      = Format 
+                                HeaderFormatWav 
+                                SampleFormatDouble 
+                                EndianCpu,
                 sections    = 1,
                 seekable    = True
             }
