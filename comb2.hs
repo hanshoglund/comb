@@ -7,6 +7,7 @@ where
 import Data.Int
 import Data.Monoid
 import Data.Maybe
+import Data.Foldable (foldMap)
 import Foreign hiding (new)
 import Control.Monad (forM_)
 import Data.List (mapAccumL, transpose, unfoldr)
@@ -148,6 +149,9 @@ instance Floating Signal where
     acosh   = lift' "acosh" acosh
 
 
+signalNodeCount :: Signal -> Int
+signalNodeCount x = getSum $ foldMap (const (Sum 1)) $ signalTree x
+
 signalTree :: Signal -> Tree String
 signalTree = go . simplify
     where
@@ -271,24 +275,41 @@ step = go
         go (Output c a) !s   = {-# SCC "output" #-}     let 
             (sa, xa) = a `step` s
             in (writeOutput 1 c xa sa, xa)
+        
         go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
 
 
+-- |
+-- Optimize a signal. Only works on simplified signals.
+--
 optimize :: Signal -> Signal
-optimize = go
+optimize = rec . optimize1
     where
-        go (Lift2 "(*)" _ (Constant 0) b) = 0
-        go (Lift2 "(*)" _ a (Constant 0)) = 0
-        go (Lift2 "(*)" _ (Constant 1) b) = b
-        go (Lift2 "(*)" _ a (Constant 1)) = a
+        rec (Lift n f a)     = Lift n f (optimize a)
+        rec (Lift2 n f a b)  = Lift2 n f (optimize a) (optimize b)
+        rec (Output c a)     = Output c (optimize a)
+        rec a                = a
 
+optimize1 :: Signal -> Signal
+optimize1 = go
+    where
+        -- Remove unnecessary computation
         go (Lift2 "(+)" _ (Constant 0) b) = b
         go (Lift2 "(+)" _ a (Constant 0)) = a
         go (Lift2 "(-)" _ (Constant 0) b) = b
         go (Lift2 "(-)" _ a (Constant 0)) = a
 
+        go (Lift2 "(*)" _ (Constant 0) b) = 0
+        go (Lift2 "(*)" _ a (Constant 0)) = 0
+        go (Lift2 "(*)" _ (Constant 1) b) = b
+        go (Lift2 "(*)" _ a (Constant 1)) = a
+
         go (Lift2 "(/)" _ (Constant 0) a) = 0
         go (Lift2 "(/)" _ a (Constant 0)) = error "optimize: Division by zero"
+
+        -- Pre-evaluate constant expressions
+        go (Lift _ f (Constant a))               = Constant $ f a
+        go (Lift2 _ f (Constant a) (Constant b)) = Constant $ f a b
 
         go a = a
 
@@ -369,8 +390,9 @@ main = do
 
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 
--- sig = sin $ line freq
 sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+-- sig = sin $ line freq
+-- sig = major $ line $ freq/4
 
 freq = 440
            
