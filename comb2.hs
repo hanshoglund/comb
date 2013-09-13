@@ -458,7 +458,7 @@ main = do
     writeSignal "test.wav" sig 
     putStrLn "Finished"
 
-
+delaySec x = delay (round $ x*44100)
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 
 -- sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
@@ -466,9 +466,11 @@ major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 -- sig = sin $ line freq
 -- sig = major $ line $ freq/4
 
-sig = lowPass (1000+5000*sweep) 44100 0.01 6 $ random
-    where
-        sweep = (sin $ line (1/(10*2)) `max` 0)
+sig = impulse + delaySec 0.01 impulse
+
+-- sig = lowPass (1000+5000*sweep) 44100 0.01 6 $ random
+    -- where
+        -- sweep = (sin $ line (1/(10*2)) `max` 0)
 
 freq = 440
            
