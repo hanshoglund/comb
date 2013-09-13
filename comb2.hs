@@ -12,6 +12,7 @@ import Foreign hiding (newPartition)
 import Control.Monad (forM_)
 import Data.List (mapAccumL, transpose, unfoldr)
 import Data.Tree      
+import System.Random hiding (random)
 import Sound.File.Sndfile
 
 -- import Sound.PortAudio
@@ -30,19 +31,19 @@ import qualified Data.Vector.Unboxed as Vector
 -- Laws:
 
 -- > partition newPartition = [1..]
--- > partitionAll a `merge` partitionAll b = partitionAll c   iff   (a,b) = split c
+-- > partitionAll a `merge` partitionAll b = partitionAll c   iff   (a,b) = splitPart c
 -- > partitionAll A is distinct from partitionAll b
 
 type Partition a = (a,a) -- offset, diff
 
 newPartition   :: Num a => Partition a
 partition   :: Num a => Partition a -> (Partition a, a)
-split :: Num a => Partition a -> (Partition a, Partition a)
+splitPart :: Num a => Partition a -> (Partition a, Partition a)
 
 
 newPartition           = (0,1)
 partition     (o,d) = ((o+d,d), o)
-split   (o,d) = ((o,d*2), (d,d*2))
+splitPart   (o,d) = ((o,d*2), (d,d*2))
 
 
 nextP :: Num a => Partition a -> a
@@ -66,11 +67,13 @@ type Time   = Int
 data State  = State {
         -- current input values (index [0,1..])
         stateInputs     :: Map Int Double,
-
+        
         -- current bus values (index [-1,-2..])
         stateBuses      :: Map Int Double,
         stateCount      :: Int,             -- processed samples
-        stateRate       :: Double           -- samples per second
+        stateRate       :: Double,          -- samples per second
+        
+        stateRandomGen  :: StdGen           -- random number source
     }
     deriving (Show)
 
@@ -78,7 +81,7 @@ data State  = State {
     -- def = State mempty mempty 0 44100 
 
 defState :: State
-defState = State mempty mempty 0 44100
+defState = State mempty mempty 0 44100 (mkStdGen 198712261455)
 
 -- channel state    
 readInput :: Int -> State -> Double 
@@ -95,6 +98,7 @@ writeOutput n c x s = s { stateBuses = Map.insert n2 x m }
 
 data Signal
     = Time
+    | Random
     | Constant Double
     | Lift  String (Double -> Double) Signal                  -- string is optional name
     | Lift2 String (Double -> Double -> Double) Signal Signal -- string is optional name
@@ -156,6 +160,7 @@ signalTree :: Signal -> Tree String
 signalTree = go . simplify
     where
         go Time             = Node "time" []
+        go Random           = Node "random" []
         go (Constant x)     = Node (show x) []
         go (Lift n _ a)     = Node n [signalTree a]
         go (Lift2 n _ a b)  = Node n [signalTree a, signalTree b]
@@ -163,6 +168,7 @@ signalTree = go . simplify
         go (Output n a)     = Node ("output " ++ show n) [signalTree a] 
 
 time    :: Signal
+random  :: Signal
 input   :: Int -> Signal
 signal  :: Double -> Signal
 lift    :: (Double -> Double) -> Signal -> Signal
@@ -172,6 +178,7 @@ latter  :: Signal -> Signal -> Signal -- run both in given order, return second 
 loop    :: (Signal -> Signal) -> Signal
 delay :: Int -> Signal -> Signal
 time    = Time
+random  = Random
 input   = Input
 signal  = Constant
 lift    = Lift "f"
@@ -193,12 +200,17 @@ impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 line :: Double -> Signal
 line n = time*tau*signal n
 
+-- Where did I get this?
+-- See also http://www.musicdsp.org/files/Audio-EQ-Cookbook.txt
+
 lowPassC :: Double -> Double -> Double -> Double -> (Double,Double,Double,Double,Double)
 lowPassC fc fs q peakGain = (a0,a1,a2,b1,b2)
     where
         v = 10 ** abs peakGain / 20
         k = tan (pi * fc / fs)
+       
         norm = 1 / (1+k / q+k^2)
+        
         a0 = k^2 * norm
         a1 = 2 * a0
         a2 = a0
@@ -210,6 +222,8 @@ lowPass fc fs q peakGain = biquad (s a0) (s a1) (s a2) (s b1) (s b2)
     where                                                           
         s = signal
         (a0,a1,a2,b1,b2) = lowPassC fc fs q peakGain
+
+
 
 
 biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
@@ -242,8 +256,8 @@ simplify = go newPartition
                 h   = skipP g
                 
         go g (Lift n f a)     = Lift n f (go g a)
-        go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = split g
-        -- Note: split is unnecessary if evaluation is sequential
+        go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = splitPart g
+        -- Note: splitPart is unnecessary if evaluation is sequential
 
         go g x = x                                     
 
@@ -279,6 +293,7 @@ runBase a = Just . fmap incState . swap . step a2
 step :: Signal -> State -> (State, Double)
 step = go
     where
+        go Random !s           = {-# SCC "random" #-}   (s {stateRandomGen = g}, x) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
         go Time !s             = {-# SCC "time" #-}     (s, fromIntegral (stateCount s) / stateRate s) 
         go (Constant x) !s     = {-# SCC "constant" #-} (s, x)
  
@@ -411,9 +426,13 @@ main = do
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 
 -- sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
-sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9])
+-- sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9])
 -- sig = sin $ line freq
 -- sig = major $ line $ freq/4
+
+sig = lowPass (4000{-+2000*sweep-}) 44100 0.01 6 $ random
+    where
+        sweep = (sin $ line (1/(10*2)) `max` 0)
 
 freq = 440
            
