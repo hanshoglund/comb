@@ -331,8 +331,8 @@ optimize1 = go
         -- Remove unnecessary computation
         go (Lift2 "(+)" _ (Constant 0) b) = optimize b
         go (Lift2 "(+)" _ a (Constant 0)) = optimize a
-        go (Lift2 "(-)" _ (Constant 0) b) = optimize b
         go (Lift2 "(-)" _ a (Constant 0)) = optimize a
+        go (Lift2 "(-)" _ (Constant 0) b) = optimize (negate b)
 
         go (Lift2 "(*)" _ (Constant 0) b) = 0
         go (Lift2 "(*)" _ a (Constant 0)) = 0
@@ -346,8 +346,44 @@ optimize1 = go
         go (Lift _ f (Constant a))               = Constant $ f a
         go (Lift2 _ f (Constant a) (Constant b)) = Constant $ f a b
 
+        -- Reordering
+        -- TODO generalize to all commutative ops
+        
+        -- a * (x[n] * b) => x[n] * (a * b)
+        -- a * (b * x[n]) => x[n] * (a * b)
+        -- (x[n] * a) * b => x[n] * (a * b)
+        -- (a * x[n]) * b => x[n] * (a * b)
+        go noOpt@(Lift2 "(*)" f a (Lift2 "(*)" _ b c))
+            | areConstant [b,c] && isVariable a     = Lift2 "(*)" f a (optimize $ Lift2 "(*)" f b c)
+            | areConstant [a,c] && isVariable b     = Lift2 "(*)" f b (optimize $ Lift2 "(*)" f a c)
+            | areConstant [a,b] && isVariable c     = Lift2 "(*)" f c (optimize $ Lift2 "(*)" f a b)
+            | otherwise                             = noOpt
+
+        go noOpt@(Lift2 "(*)" f (Lift2 "(*)" _ b c) a)
+            | areConstant [b,c] && isVariable a     = Lift2 "(*)" f a (optimize $ Lift2 "(*)" f b c)
+            | areConstant [a,c] && isVariable b     = Lift2 "(*)" f b (optimize $ Lift2 "(*)" f a c)
+            | areConstant [a,b] && isVariable c     = Lift2 "(*)" f c (optimize $ Lift2 "(*)" f a b)
+            | otherwise                             = noOpt
+
+
         go a = a
 
+isVariable :: Signal -> Bool
+isVariable = not . isConstant
+
+isConstant :: Signal -> Bool
+isConstant = go
+    where
+        go Random           = False
+        go Time             = False
+        go (Constant _)     = True
+        go (Lift _ _ a)     = isConstant a
+        go (Lift2 _ _ a b)  = isConstant a && isConstant b
+        go (Input _)        = False
+        go (Output _ _)     = False
+
+areConstant :: [Signal] -> Bool
+areConstant = getAll . mconcat . fmap (All . isConstant)
 
 
 -- | From range (0,1) to range (-1,1)
