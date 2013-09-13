@@ -129,6 +129,7 @@ instance Num Signal where
     fromInteger x = signal (fromInteger x)
 instance Fractional Signal where
     recip = lift' "recip" recip
+    (/)   = lift2' "(/)" (/)
     fromRational x = signal (fromRational x)
 instance Show Signal where
     show = drawTree . signalTree
@@ -203,7 +204,7 @@ line n = time*tau*signal n
 -- Where did I get this?
 -- See also http://www.musicdsp.org/files/Audio-EQ-Cookbook.txt
 
-lowPassC :: Double -> Double -> Double -> Double -> (Double,Double,Double,Double,Double)
+lowPassC :: Floating a => a -> a -> a -> a -> (a, a, a, a, a)
 lowPassC fc fs q peakGain = (a0,a1,a2,b1,b2)
     where
         v = 10 ** abs peakGain / 20
@@ -217,12 +218,11 @@ lowPassC fc fs q peakGain = (a0,a1,a2,b1,b2)
         b1 = 2 * (k^2 - 1) * norm
         b2 = (1 - k / q + k^2) * norm
 
-lowPass :: Double -> Double -> Double -> Double -> Signal -> Signal
+lowPass :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal
 lowPass fc fs q peakGain = biquad (s a0) (s a1) (s a2) (s b1) (s b2)
     where                                                           
-        s = signal
+        s = id
         (a0,a1,a2,b1,b2) = lowPassC fc fs q peakGain
-
 
 
 
@@ -430,7 +430,7 @@ major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 -- sig = sin $ line freq
 -- sig = major $ line $ freq/4
 
-sig = lowPass (4000{-+2000*sweep-}) 44100 0.01 6 $ random
+sig = lowPass (1000+5000*sweep) 44100 0.01 6 $ random
     where
         sweep = (sin $ line (1/(10*2)) `max` 0)
 
