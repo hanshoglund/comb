@@ -69,7 +69,7 @@ data State  = State {
         stateInputs     :: Map Int Double,
         
         -- current bus values (index [-1,-2..])
-        stateBuses      :: Map Int Double,
+        stateBuses      :: Map (Int,Int) Double,
         stateCount      :: Int,             -- processed samples
         stateRate       :: Double,          -- samples per second
         
@@ -82,18 +82,24 @@ data State  = State {
 
 defState :: State
 defState = State mempty mempty 0 44100 (mkStdGen 198712261455)
+    -- TODO prefill with zeroes
 
 -- channel state    
 readInput :: Int -> State -> Double 
-readInput n s = fromMaybe 0 $ Map.lookup n2 m
+readInput c s = fromMaybe 0 $
+    if c > 0 
+        then Map.lookup c          (stateInputs s) 
+        else Map.lookup (0, neg c) (stateBuses s)
     where
-        (n2, m) = if n > 0 then (n, stateInputs s) else (negate $ n+1, stateBuses s)
+        neg = negate . (+ 1)
 
 -- delay channel value state
 writeOutput :: Int -> Int -> Double -> State -> State 
-writeOutput n c x s = s { stateBuses = Map.insert n2 x m } 
+writeOutput n c x s = s { stateBuses = 
+    Map.insert (0, neg c) x (stateBuses s) 
+    } 
     where
-        (n2, m) = (negate $ c+1, stateBuses s)
+        neg = negate . (+ 1)
 
 
 data Signal
@@ -460,12 +466,15 @@ main = do
 delaySec x = delay (round $ x*44100)
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 
--- sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+sig = sweep * (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+    where
+        sweep = (sin $ line (1/(10*2)) `max` 0)
+        
 -- sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9])
 -- sig = sin $ line freq
 -- sig = major $ line $ freq/4
 
-sig = impulse + delaySec 0.01 impulse
+-- sig = impulse + delaySec 0.01 impulse
 
 -- sig = lowPass (1000+5000*sweep) 44100 0.01 6 $ random
     -- where
