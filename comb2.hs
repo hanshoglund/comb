@@ -8,7 +8,7 @@ import Data.Int
 import Data.Monoid
 import Data.Maybe
 import Data.Foldable (foldMap)
-import Foreign hiding (new)
+import Foreign hiding (newPartition)
 import Control.Monad (forM_)
 import Data.List (mapAccumL, transpose, unfoldr)
 import Data.Tree      
@@ -29,31 +29,31 @@ import qualified Data.Vector.Unboxed as Vector
 -- Generate unique sets
 -- Laws:
 
--- > gen new = [1..]
--- > genAll a `merge` genAll b = genAll c   iff   (a,b) = split c
--- > genAll A is distinct from genAll b
+-- > partition newPartition = [1..]
+-- > partitionAll a `merge` partitionAll b = partitionAll c   iff   (a,b) = split c
+-- > partitionAll A is distinct from partitionAll b
 
-type Gen a = (a,a) -- offset, diff
+type Partition a = (a,a) -- offset, diff
 
-new   :: Num a => Gen a
-gen   :: Num a => Gen a -> (Gen a, a)
-split :: Num a => Gen a -> (Gen a, Gen a)
+newPartition   :: Num a => Partition a
+partition   :: Num a => Partition a -> (Partition a, a)
+split :: Num a => Partition a -> (Partition a, Partition a)
 
 
-new           = (0,1)
-gen     (o,d) = ((o+d,d), o)
+newPartition           = (0,1)
+partition     (o,d) = ((o+d,d), o)
 split   (o,d) = ((o,d*2), (d,d*2))
 
 
-next :: Num a => Gen a -> a
-skip :: Num a => Gen a -> Gen a
-next = snd . gen
-skip = fst . gen
+nextP :: Num a => Partition a -> a
+skipP :: Num a => Partition a -> Partition a
+nextP = snd . partition
+skipP = fst . partition
 
-genAll :: Num a => Gen a -> [a]
-genAll g = let
-    (g2,x) = gen g
-    in x : genAll g2
+partitionAll :: Num a => Partition a -> [a]
+partitionAll g = let
+    (g2,x) = partition g
+    in x : partitionAll g2
 
 
 
@@ -226,20 +226,20 @@ biquad b0 b1 b2 a1 a2 x = loop $ \y ->
 --   * All delays with local input/output pair
 --
 simplify :: Signal -> Signal
-simplify = go new
+simplify = go newPartition
     where
         go g (Loop f)        = out $ go h (f inp)
             where                     
                 out   = Output i
                 inp   = Input i
-                i     = neg $ next g
-                h     = skip g
+                i     = neg $ nextP g
+                h     = skipP g
         go g (Delay a)        = inp `former` out
             where
                 out = Output i (go h a)
                 inp = Input i
-                i   = neg $ next g
-                h   = skip g
+                i   = neg $ nextP g
+                h   = skipP g
                 
         go g (Lift n f a)     = Lift n f (go g a)
         go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = split g
@@ -344,7 +344,7 @@ toPos  :: Fractional a => a -> a
 toPos x  = (x+1)/2
 
 
--- Could be more general if not due to MonoMorph..R
+-- Could be more partitioneral if not due to MonoMorph..R
 -- toBars :: RealFrac a => a -> String
 
 -- | View as bars if in range (-1,1)
