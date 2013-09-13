@@ -329,15 +329,15 @@ optimize1 :: Signal -> Signal
 optimize1 = go
     where
         -- Remove unnecessary computation
-        go (Lift2 "(+)" _ (Constant 0) b) = b
-        go (Lift2 "(+)" _ a (Constant 0)) = a
-        go (Lift2 "(-)" _ (Constant 0) b) = b
-        go (Lift2 "(-)" _ a (Constant 0)) = a
+        go (Lift2 "(+)" _ (Constant 0) b) = optimize b
+        go (Lift2 "(+)" _ a (Constant 0)) = optimize a
+        go (Lift2 "(-)" _ (Constant 0) b) = optimize b
+        go (Lift2 "(-)" _ a (Constant 0)) = optimize a
 
         go (Lift2 "(*)" _ (Constant 0) b) = 0
         go (Lift2 "(*)" _ a (Constant 0)) = 0
-        go (Lift2 "(*)" _ (Constant 1) b) = b
-        go (Lift2 "(*)" _ a (Constant 1)) = a
+        go (Lift2 "(*)" _ (Constant 1) b) = optimize b
+        go (Lift2 "(*)" _ a (Constant 1)) = optimize a
 
         go (Lift2 "(/)" _ (Constant 0) a) = 0
         go (Lift2 "(/)" _ a (Constant 0)) = error "optimize: Division by zero"
