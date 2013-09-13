@@ -219,9 +219,8 @@ lowPassC fc fs q peakGain = (a0,a1,a2,b1,b2)
         b2 = (1 - k / q + k^2) * norm
 
 lowPass :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal
-lowPass fc fs q peakGain = biquad (s a0) (s a1) (s a2) (s b1) (s b2)
+lowPass fc fs q peakGain = biquad a0 a1 a2 b1 b2
     where                                                           
-        s = id
         (a0,a1,a2,b1,b2) = lowPassC fc fs q peakGain
 
 
@@ -328,7 +327,7 @@ optimize = rec . optimize1
 optimize1 :: Signal -> Signal
 optimize1 = go
     where
-        -- Remove unnecessary computation
+        -- Identities
         go (Lift2 "(+)" _ (Constant 0) b) = optimize b
         go (Lift2 "(+)" _ a (Constant 0)) = optimize a
         go (Lift2 "(-)" _ a (Constant 0)) = optimize a
