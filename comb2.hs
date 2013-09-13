@@ -99,11 +99,27 @@ readActualInput c s = fromMaybe 0 $
 
 readBus :: Int -> State -> Double 
 readBus c s = fromMaybe 0 $ 
-    Map.lookup (0, c) (stateBuses s)
+    Map.lookup (bufferPointer s, c) (stateBuses s)
+
+-- Advance state count
+incState :: State -> State
+incState x = x { stateCount = stateCount x + 1 }
+
+bufferPointer :: State -> Int
+bufferPointer s = stateCount s `mod` kMaxDelay
+    where
+        kMaxDelay = 44100*5
+
+-- Write with some delay.
+-- Buses are always read at bufferPointer
+--
+-- Writing with delay 0 is an error
+-- Writing with delay n writes at (bufferPointer+n)
 
 writeBus :: Int -> Int -> Double -> State -> State 
-writeBus n c x s = s { stateBuses = 
-    Map.insert (0, c) x (stateBuses s) } 
+writeBus n c x s 
+    | n <= 0    = error "writeBus: Negative or zero delay."
+    | otherwise = s { stateBuses = Map.insert (bufferPointer s + n, c) x (stateBuses s) }
 
 neg = negate . (+ 1)
 
@@ -116,7 +132,7 @@ data Signal
     | Lift2 String (Double -> Double -> Double) Signal Signal -- string is optional name
 
     | Loop (Signal -> Signal)
-    | Delay Signal
+    | Delay Int Signal
 
     -- >= 0 means real (global) input
     -- <  0 means local (feedback) input
@@ -124,7 +140,7 @@ data Signal
     | Input Int 
 
     -- only used for feedback for now
-    | Output Int Signal
+    | Output Int Int Signal
 
 instance Eq Signal where
     (==) = error "No (==)"
@@ -177,8 +193,8 @@ signalTree = go . simplify
         go (Constant x)     = Node (show x) []
         go (Lift n _ a)     = Node n [signalTree a]
         go (Lift2 n _ a b)  = Node n [signalTree a, signalTree b]
-        go (Input n)        = Node ("input " ++ show n) []
-        go (Output n a)     = Node ("output " ++ show n) [signalTree a] 
+        go (Input c)        = Node ("input " ++ show c) []
+        go (Output n c a)   = Node ("output " ++ show c ++ "[-"++show n++"]") [signalTree a] 
 
 time    :: Signal
 random  :: Signal
@@ -201,10 +217,11 @@ lift2'  = Lift2
 latter  = Lift2 "latter" (\_ x -> x)
 former  = Lift2 "former" (\x _ -> x)
 loop    = Loop
-delay 0 = id
-delay n = delay1 . delay (n - 1)
-    where
-        delay1 = Delay
+delay   = Delay
+-- delay 0 = id
+-- delay n = delay1 . delay (n - 1)
+--     where
+--         delay1 = Delay 1
 
 impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 
@@ -255,13 +272,13 @@ simplify = go newPart
     where
         go g (Loop f)        = out $ go h (f inp)
             where                     
-                out   = Output i
+                out   = Output 1 i
                 inp   = Input i
                 i     = neg $ nextP g
                 h     = skipP g
-        go g (Delay a)        = inp `former` out
+        go g (Delay n a)        = inp `former` out
             where
-                out = Output i (go h a)
+                out = Output n i (go h a)
                 inp = Input i
                 i   = neg $ nextP g
                 h   = skipP g
@@ -292,7 +309,6 @@ runBase :: Signal -> State -> Maybe (Double, State)
 runBase a = Just . fmap incState . swap . step a2
     where                                                
         !a2        = (optimize . simplify) a
-        incState x = x { stateCount = stateCount x + 1 }
 
 -- |
 -- Run a signal over a state. Only works on simplified signals.
@@ -318,9 +334,9 @@ step = go
             -- TODO could be more parallel with non-sequential state
  
         go (Input c) !s      = {-# SCC "input" #-}      (s, readSamp c s)
-        go (Output c a) !s   = {-# SCC "output" #-}     let 
+        go (Output n c a) !s = {-# SCC "output" #-}     let 
             (sa, xa) = a `step` s
-            in (writeSamp 1 c xa sa, xa)
+            in (writeSamp n c xa sa, xa)
         
         go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
 
@@ -333,7 +349,7 @@ optimize = rec . optimize1
     where
         rec (Lift n f a)     = Lift n f (optimize a)
         rec (Lift2 n f a b)  = Lift2 n f (optimize a) (optimize b)
-        rec (Output c a)     = Output c (optimize a)
+        rec (Output n c a)   = Output n c (optimize a)
         rec a                = a
 
 optimize1 :: Signal -> Signal
@@ -391,7 +407,7 @@ isConstant = go
         go (Lift _ _ a)     = isConstant a
         go (Lift2 _ _ a b)  = isConstant a && isConstant b
         go (Input _)        = False
-        go (Output _ _)     = False
+        go (Output _ _ _)   = False
 
 areConstant :: [Signal] -> Bool
 areConstant = getAll . mconcat . fmap (All . isConstant)
@@ -472,19 +488,21 @@ main = do
 delaySec x = delay (round $ x*44100)
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 
-sig = sweep * (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
-    where
-        sweep = (sin $ line (1/(10*2)) `max` 0)
+-- sig = sweep * (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+    -- where
+        -- sweep = (sin $ line (1/(10*2)) `max` 0)
         
 -- sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9])
 -- sig = sin $ line freq
 -- sig = major $ line $ freq/4
 
--- sig = impulse + delaySec 0.01 impulse
 
--- sig = lowPass (1000+5000*sweep) 44100 0.01 6 $ random
-    -- where
-        -- sweep = (sin $ line (1/(10*2)) `max` 0)
+sig = lowPass (1000+5000*sweep) 44100 0.01 6 $ random
+    where
+        sweep = (sin $ line (1/(10*2)) `max` 0)
+
+-- sig = (sum $ fmap (\x -> delaySec (x/10) impulse) [1..10])
+
 
 freq = 440
            
