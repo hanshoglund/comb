@@ -193,9 +193,29 @@ impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 line :: Double -> Signal
 line n = time*tau*signal n
 
+lowPassC :: Double -> Double -> Double -> Double -> (Double,Double,Double,Double,Double)
+lowPassC fc fs q peakGain = (a0,a1,a2,b1,b2)
+    where
+        v = 10 ** abs peakGain / 20
+        k = tan (pi * fc / fs)
+        norm = 1 / (1+k / q+k^2)
+        a0 = k^2 * norm
+        a1 = 2 * a0
+        a2 = a0
+        b1 = 2 * (k^2 - 1) * norm
+        b2 = (1 - k / q + k^2) * norm
+
+lowPass :: Double -> Double -> Double -> Double -> Signal -> Signal
+lowPass fc fs q peakGain = biquad (s a0) (s a1) (s a2) (s b1) (s b2)
+    where                                                           
+        s = signal
+        (a0,a1,a2,b1,b2) = lowPassC fc fs q peakGain
+
+
 biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
-biquad b0 b1 b2 a1 a2 x = loop $ \y -> b0*x + b1*delay 1 x + b2*delay 2 x 
-    - a1*delay 1 y - a2*delay 2 y
+biquad b0 b1 b2 a1 a2 x = loop $ \y -> 
+    b0*x + b1 * delay 1 x + b2 * delay 2 x 
+         - a1 * delay 1 y - a2 * delay 2 y
 
 -- |
 -- Recursively remove signal constructors not handled by 'step'.
@@ -390,7 +410,8 @@ main = do
 
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 
-sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+-- sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9])
 -- sig = sin $ line freq
 -- sig = major $ line $ freq/4
 
