@@ -108,7 +108,7 @@ incState x = x { stateCount = stateCount x + 1 }
 bufferPointer :: State -> Int
 bufferPointer s = stateCount s `mod` kMaxDelay
     where
-        kMaxDelay = 44100*5
+        kMaxDelay = 44100*60*5
 
 -- Write with some delay.
 -- Buses are always read at bufferPointer
@@ -496,10 +496,11 @@ major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 -- sig = sin $ line freq
 -- sig = major $ line $ freq/4
 
+sig = sin (line 440)*(sin (line$1/2))*0.1 + delaySec 0.5 (sin (line 440*3/5)*(sin (line$1/2))*0.1)
 
-sig = lowPass (1000+5000*sweep) 44100 0.01 6 $ random
-    where
-        sweep = (sin $ line (1/(10*2)) `max` 0)
+-- sig = lowPass (1000+5000*sweep) 44100 0.01 6 $ random
+    -- where
+        -- sweep = (sin $ line (1/(10*2)) `max` 0)
 
 -- sig = (sum $ fmap (\x -> delaySec (x/10) impulse) [1..10])
 
