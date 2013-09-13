@@ -8,7 +8,7 @@ import Data.Int
 import Data.Monoid
 import Data.Maybe
 import Data.Foldable (foldMap)
-import Foreign hiding (newPartition)
+import Foreign hiding (newPart)
 import Control.Monad (forM_)
 import Data.List (mapAccumL, transpose, unfoldr)
 import Data.Tree      
@@ -30,28 +30,28 @@ import qualified Data.Vector.Unboxed as Vector
 -- Generate unique sets
 -- Laws:
 
--- > partition newPartition = [1..]
+-- > partition newPart = [1..]
 -- > partitionAll a `merge` partitionAll b = partitionAll c   iff   (a,b) = splitPart c
 -- > partitionAll A is distinct from partitionAll b
 
-type Partition a = (a,a) -- offset, diff
+type Part a = (a,a) -- offset, diff
 
-newPartition   :: Num a => Partition a
-partition   :: Num a => Partition a -> (Partition a, a)
-splitPart :: Num a => Partition a -> (Partition a, Partition a)
+newPart   :: Num a => Part a
+partition   :: Num a => Part a -> (Part a, a)
+splitPart :: Num a => Part a -> (Part a, Part a)
 
 
-newPartition           = (0,1)
+newPart           = (0,1)
 partition     (o,d) = ((o+d,d), o)
 splitPart   (o,d) = ((o,d*2), (d,d*2))
 
 
-nextP :: Num a => Partition a -> a
-skipP :: Num a => Partition a -> Partition a
+nextP :: Num a => Part a -> a
+skipP :: Num a => Part a -> Part a
 nextP = snd . partition
 skipP = fst . partition
 
-partitionAll :: Num a => Partition a -> [a]
+partitionAll :: Num a => Part a -> [a]
 partitionAll g = let
     (g2,x) = partition g
     in x : partitionAll g2
@@ -240,7 +240,7 @@ biquad b0 b1 b2 a1 a2 x = loop $ \y ->
 --   * All delays with local input/output pair
 --
 simplify :: Signal -> Signal
-simplify = go newPartition
+simplify = go newPart
     where
         go g (Loop f)        = out $ go h (f inp)
             where                     
