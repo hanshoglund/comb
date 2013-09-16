@@ -402,26 +402,35 @@ instance Floating Signal where
     acosh           = lift' "acosh" acosh  
 
 -- | Number of seconds elapsed
-time    :: Signal
+time        :: Signal
+
 -- | Random values in range (-1,1)
-random  :: Signal
+random      :: Signal
+
 -- | Constant value
-constant  :: Double -> Signal
+constant    :: Double -> Signal
+
 -- | Input
-input   :: Int -> Signal
+input       :: Int -> Signal
+
 
 -- | Lifted unary op
-lift    :: (Double -> Double) -> Signal -> Signal
+lift        :: (Double -> Double) -> Signal -> Signal
+
 -- | Lifted binary op
-lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
+lift2       :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
+
 -- | Run both in given order, return first arg
-former  :: Signal -> Signal -> Signal 
+former      :: Signal -> Signal -> Signal 
+
 -- | Run both in given order, return second arg
-latter  :: Signal -> Signal -> Signal 
+latter      :: Signal -> Signal -> Signal 
+
 -- | Fixpoint with implicit 1 sample delay
-loop    :: (Signal -> Signal) -> Signal
+loop        :: (Signal -> Signal) -> Signal
+
 -- | An n-sample delay, where n > 0
-delay   :: Int -> Signal -> Signal
+delay       :: Int -> Signal -> Signal
 
 time    = Time
 random  = Random
