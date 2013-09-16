@@ -120,8 +120,6 @@ writeBus n c x s
     | n <= 0    = error "writeBus: Negative or zero delay."
     | otherwise = s { stateBuses = Map.insert (bufferPointer s + n, c) x (stateBuses s) }
 
-neg = negate . (+ 1)
-
 
 data Signal
     = Time
@@ -141,88 +139,37 @@ data Signal
     -- < 0 mean feedback output
     | Output Int Int Signal
 
--- |
--- Recursively remove signal constructors not handled by 'step'.
--- 
--- Currently, it replaces:
---
---   * All loops with local input/outputs
---   * All delays with local input/output pair
---
-simplify :: Signal -> Signal
-simplify = go newPart
+isVariable :: Signal -> Bool
+isVariable = not . isConstant
+
+isConstant :: Signal -> Bool
+isConstant = go
     where
-        go g (Loop f)        = out $ go h (f inp)
-            where                     
-                out   = Output 1 i
-                inp   = Input i
-                i     = neg $ nextP g
-                h     = skipP g
-        go g (Delay n a)        = inp `former` out
-            where
-                out = Output n i (go h a)
-                inp = Input i
-                i   = neg $ nextP g
-                h   = skipP g
-                
-        go g (Lift n f a)     = Lift n f (go g a)
-        go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = splitPart g
-        -- Note: splitPart is unnecessary if evaluation is sequential
+        go Random           = False
+        go Time             = False
+        go (Constant _)     = True
+        go (Lift _ _ a)     = isConstant a
+        go (Lift2 _ _ a b)  = isConstant a && isConstant b
+        go (Input _)        = False
+        go (Output _ _ _)   = False
 
-        go g x = x                                     
+areConstant :: [Signal] -> Bool
+areConstant = getAll . mconcat . fmap (All . isConstant)
 
-        neg x = negate (x + 1)
+signalNodeCount :: Signal -> Int
+signalNodeCount x = getSum $ foldMap (const (Sum 1)) $ signalTree x
 
-put :: Signal -> IO ()
-put a = mapM_ (putStrLn.toBars) $ take 60 $ run a
-
-run :: Signal -> [Double]                               
-run a = unfoldr (runBase a) defState
-
-runVec :: Int -> Signal -> Vector Double                               
-runVec n a = Vector.unfoldrN n (runBase a) defState
-
--- runBase :: Signal -> State -> Maybe (Double, State)
--- runBase a x = (Just . fmap incState . swap . step a) x
---     where
---         incState x = x { stateCount = stateCount x + 1 }
-
-runBase :: Signal -> State -> Maybe (Double, State)
-runBase a = Just . fmap incState . swap . step a2
-    where                                                
-        !a2        = (optimize . simplify) a
-
--- |
--- Run a signal over a state. Only works on simplified signals.
---
--- Note that the signal is the first argument, which is usually applied once The resulting
--- function is then unfolded to yield the outputs. We might think of the repeated s
--- application as 'run time'
---
-step :: Signal -> State -> (State, Double)
-step = go
+signalTree :: Signal -> Tree String
+signalTree = go . simplify
     where
-        go Random !s           = {-# SCC "random" #-}   (s {stateRandomGen = g}, x) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
-        go Time !s             = {-# SCC "time" #-}     (s, fromIntegral (stateCount s) / stateRate s) 
-        go (Constant x) !s     = {-# SCC "constant" #-} (s, x)
- 
-        go (Lift _ f a) !s     = {-# SCC "lift" #-}     let 
-            (!sa, !xa) = a `step` s 
-            in (sa, f xa)
-        go (Lift2 _ f a b) !s  = {-# SCC "lift2" #-}    let
-            (!sa, !xa) = a `step` s
-            (!sb, !xb) = b `step` sa 
-            in (sb, f xa xb)      
-            -- TODO could be more parallel with non-sequential state
- 
-        go (Input c) !s      = {-# SCC "input" #-}      (s, readSamp c s)
-        go (Output n c a) !s = {-# SCC "output" #-}     let 
-            (sa, xa) = a `step` s
-            in (writeSamp n c xa sa, xa)
-        
-        go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
-
-
+        go Time             = Node "time" []
+        go Random           = Node "random" []
+        go (Constant x)     = Node (show x) []
+        go (Lift n _ a)     = Node n [signalTree a]
+        go (Lift2 n _ a b)  = Node n [signalTree a, signalTree b]
+        go (Input c)        = Node ("input " ++ show c) []
+        go (Output n c a)   = Node ("output " ++ show c ++ "[-"++show n++"]") [signalTree a] 
+                                                                                                   
 -- |
 -- Optimize a signal. Only works on simplified signals.
 --
@@ -276,37 +223,86 @@ optimize1 = go
 
 
         go a = a
+                  
 
-isVariable :: Signal -> Bool
-isVariable = not . isConstant
-
-isConstant :: Signal -> Bool
-isConstant = go
+-- |
+-- Recursively remove signal constructors not handled by 'step'.
+-- 
+-- Currently, it replaces:
+--
+--   * All loops with local input/outputs
+--   * All delays with local input/output pair
+--
+simplify :: Signal -> Signal
+simplify = go newPart
     where
-        go Random           = False
-        go Time             = False
-        go (Constant _)     = True
-        go (Lift _ _ a)     = isConstant a
-        go (Lift2 _ _ a b)  = isConstant a && isConstant b
-        go (Input _)        = False
-        go (Output _ _ _)   = False
+        go g (Loop f)        = out $ go h (f inp)
+            where                     
+                out   = Output 1 i
+                inp   = Input i
+                i     = neg $ nextP g
+                h     = skipP g
+        go g (Delay n a)        = inp `former` out
+            where
+                out = Output n i (go h a)
+                inp = Input i
+                i   = neg $ nextP g
+                h   = skipP g
+                
+        go g (Lift n f a)     = Lift n f (go g a)
+        go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = splitPart g
+        -- Note: splitPart is unnecessary if evaluation is sequential
 
-areConstant :: [Signal] -> Bool
-areConstant = getAll . mconcat . fmap (All . isConstant)
+        go g x = x                                     
 
-signalNodeCount :: Signal -> Int
-signalNodeCount x = getSum $ foldMap (const (Sum 1)) $ signalTree x
 
-signalTree :: Signal -> Tree String
-signalTree = go . simplify
+-- |
+-- Run a signal over a state. Only works on simplified signals.
+--
+-- Note that the signal is the first argument, which is usually applied once The resulting
+-- function is then unfolded to yield the outputs. We might think of the repeated s
+-- application as 'run time'
+--
+step :: Signal -> State -> (State, Double)
+step = go
     where
-        go Time             = Node "time" []
-        go Random           = Node "random" []
-        go (Constant x)     = Node (show x) []
-        go (Lift n _ a)     = Node n [signalTree a]
-        go (Lift2 n _ a b)  = Node n [signalTree a, signalTree b]
-        go (Input c)        = Node ("input " ++ show c) []
-        go (Output n c a)   = Node ("output " ++ show c ++ "[-"++show n++"]") [signalTree a] 
+        go Random !s           = {-# SCC "random" #-}   (s {stateRandomGen = g}, x) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
+        go Time !s             = {-# SCC "time" #-}     (s, fromIntegral (stateCount s) / stateRate s) 
+        go (Constant x) !s     = {-# SCC "constant" #-} (s, x)
+ 
+        go (Lift _ f a) !s     = {-# SCC "lift" #-}     let 
+            (!sa, !xa) = a `step` s 
+            in (sa, f xa)
+        go (Lift2 _ f a b) !s  = {-# SCC "lift2" #-}    let
+            (!sa, !xa) = a `step` s
+            (!sb, !xb) = b `step` sa 
+            in (sb, f xa xb)      
+            -- TODO could be more parallel with non-sequential state
+ 
+        go (Input c) !s      = {-# SCC "input" #-}      (s, readSamp c s)
+        go (Output n c a) !s = {-# SCC "output" #-}     let 
+            (sa, xa) = a `step` s
+            in (writeSamp n c xa sa, xa)
+        
+        go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
+
+
+
+
+
+put :: Signal -> IO ()
+put a = mapM_ (putStrLn.toBars) $ take 60 $ run a
+
+run :: Signal -> [Double]                               
+run a = unfoldr (runBase a) defState
+
+runVec :: Int -> Signal -> Vector Double                               
+runVec n a = Vector.unfoldrN n (runBase a) defState
+
+runBase :: Signal -> State -> Maybe (Double, State)
+runBase a = Just . fmap incState . swap . step a2
+    where                                                
+        !a2        = (optimize . simplify) a
 
 
 --------------------------------------------------------------------------------
@@ -507,6 +503,7 @@ first  f (a,b)      = (f a, b)
 second f (a,b)      = (a, f b)
 swap (a,b)          = (b, a)
 dup x               = (x, x)
+neg x               = negate (x + 1)
 
 
 --------------------------------------------------------------------------------
@@ -541,7 +538,7 @@ sig = lowPass (1000+5000*sweep) sr 0.01 6 $ random
 freq = 440
            
 numSampls = sr * secs
-secs = 2
+secs = 10
 sr   = 44100 -- TODO see stateRate above
 
 
