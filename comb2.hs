@@ -27,6 +27,9 @@ import qualified Data.Vector.Unboxed as Vector
 
 
 
+--------------------------------------------------------------------------------
+-- Partitions
+
 -- Generate unique sets
 -- Laws:
 
@@ -56,14 +59,13 @@ partitionAll g = let
     (g2,x) = partition g
     in x : partitionAll g2
 
-
-
-
+--------------------------------------------------------------------------------
+-- Partitions
 
 --  A signal is a function of inputs and time over some local state
 --  Note that input/outputs may include global buffers
 --  TODO higher-order, signals of signals (switching)
-type Time   = Int
+
 data State  = State {
         -- current input values (index [0,1..])
         stateInputs     :: Map Int Double,
@@ -77,12 +79,11 @@ data State  = State {
     }
     deriving (Show)
 
--- instance Default State where
-    -- def = State mempty mempty 0 44100 
-
 defState :: State
 defState = State mempty mempty 0 44100 (mkStdGen 198712261455)
-    -- TODO prefill with zeroes
+
+-- prefilledBuses :: Map (Int,Int) Double
+-- prefilledBuses = Map.fromList $! [ (a,b) | a <- [1..1000], b <- [-1,-2..negate kMaxBuses]] `zip` (repeat 0)
 
 -- channel state
 readSamp :: Int -> State -> Double
@@ -107,8 +108,9 @@ incState x = x { stateCount = stateCount x + 1 }
 
 bufferPointer :: State -> Int
 bufferPointer s = stateCount s `mod` kMaxDelay
-    where
-        kMaxDelay = 44100*60*5
+
+kMaxBuses = 20
+kMaxDelay = 44100*60*5
 
 -- Write with some delay.
 -- Buses are always read at bufferPointer
@@ -509,7 +511,7 @@ sig = lowPass (1000+5000*sweep) sr 0.01 6 $ random
 freq = 440
            
 numSampls = sr * secs
-secs = 10
+secs = 2
 sr   = 44100 -- TODO see stateRate above
 
 
