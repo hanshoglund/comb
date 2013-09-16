@@ -28,15 +28,15 @@ import qualified Data.Vector.Unboxed as Vector
 
 
 --------------------------------------------------------------------------------
--- Partitions
+-- Part
 
--- Generate unique sets
--- Laws:
-
+-- | 
+-- 'Part Integer' represents a partition of the set of positive integers.
+-- 
 -- > runPart newPart = [1..]
 -- > runPartAll a `merge` runPartAll b = runPartAll c   iff   (a,b) = splitPart c
 -- > runPartAll A is distinct from runPartAll b
-
+-- 
 type Part a = (a,a) -- offset, diff
 
 newPart     :: Num a => Part a
@@ -44,7 +44,7 @@ runPart     :: Num a => Part a -> (Part a, a)
 splitPart   :: Num a => Part a -> (Part a, Part a)
 nextP       :: Num a => Part a -> a
 skipP       :: Num a => Part a -> Part a
-runPartAll :: Num a => Part a -> [a]
+runPartAll  :: Num a => Part a -> [a]
 
 newPart         = (0,1)
 runPart (o,d)   = ((o+d,d), o)
@@ -64,10 +64,10 @@ runPartAll g    = let
 --  TODO higher-order, signals of signals (switching)
 
 data State  = State {
-        -- current input values (index [0,1..])
+        -- Current input values (index [0,1..])
         stateInputs     :: Map Int Double,
         
-        -- current bus values (index [-1,-2..])
+        -- Current and previous bus values (index [-1,-2..])
         stateBuses      :: Map (Int,Int) Double,
         stateCount      :: Int,             -- processed samples
         stateRate       :: Double,          -- samples per second
@@ -135,10 +135,10 @@ data Signal
 
     -- >= 0 means real (global) input
     -- <  0 means local (feedback) input
-
     | Input Int 
 
-    -- only used for feedback for now
+    -- >= 0 means real (global) input
+    -- < 0 mean feedback output
     | Output Int Int Signal
 
 -- |
@@ -361,59 +361,72 @@ writeSignal path a = do
 
 -- API
 
+-- Bogus instance required by Ord
 instance Eq Signal where
-    (==) = error "No (==)"
+    (==)            = error "No (==)"
 instance Ord Signal where
-    compare = error "No compare"
-    max = lift2' "max" max
-    min = lift2' "min" min
+    compare         = error "No compare, (<) or (>)"
+    max             = lift2' "max" max
+    min             = lift2' "min" min
 instance Num Signal where
-    (+) = lift2' "(+)" (+)
-    (*) = lift2' "(*)" (*)
+    (+)             = lift2' "(+)" (+)
+    (*)             = lift2' "(*)" (*)
     (-) = lift2' "(-)" (-)
-    abs           = lift' "abs" abs
-    signum        = lift' "signum" signum
-    fromInteger x = signal (fromInteger x)
+    abs             = lift' "abs" abs
+    signum          = lift' "signum" signum
+    fromInteger x   = constant (fromInteger x)
 instance Fractional Signal where
-    recip = lift' "recip" recip
-    (/)   = lift2' "(/)" (/)
-    fromRational x = signal (fromRational x)
+    recip           = lift' "recip" recip
+    (/)             = lift2' "(/)" (/)
+    fromRational x  = constant (fromRational x)
 instance Show Signal where
-    show = drawTree . signalTree
+    show            = drawTree . signalTree
 instance Floating Signal where
-    pi      = signal pi
-    exp     = lift' "exp" exp
-    sqrt    = lift' "sqrt" sqrt
-    log     = lift' "log" log
-    (**)    = lift2' "(**)" (**)
-    logBase = lift2' "logBase" logBase
-    sin     = lift' "sin" sin
-    tan     = lift' "tan" tan
-    cos     = lift' "cos" cos
-    asin    = lift' "asin" asin
-    atan    = lift' "atan" atan
-    acos    = lift' "acos" acos
-    sinh    = lift' "sinh" sinh
-    tanh    = lift' "tanh" tanh
-    cosh    = lift' "cosh" cosh
-    asinh   = lift' "asinh" asinh
-    atanh   = lift' "atanh" atanh
-    acosh   = lift' "acosh" acosh  
+    pi              = constant pi
+    exp             = lift' "exp" exp
+    sqrt            = lift' "sqrt" sqrt
+    log             = lift' "log" log
+    (**)            = lift2' "(**)" (**)
+    logBase         = lift2' "logBase" logBase
+    sin             = lift' "sin" sin
+    tan             = lift' "tan" tan
+    cos             = lift' "cos" cos
+    asin            = lift' "asin" asin
+    atan            = lift' "atan" atan
+    acos            = lift' "acos" acos
+    sinh            = lift' "sinh" sinh
+    tanh            = lift' "tanh" tanh
+    cosh            = lift' "cosh" cosh
+    asinh           = lift' "asinh" asinh
+    atanh           = lift' "atanh" atanh
+    acosh           = lift' "acosh" acosh  
 
+-- | Number of seconds elapsed
 time    :: Signal
+-- | Random values in range (-1,1)
 random  :: Signal
+-- | Constant value
+constant  :: Double -> Signal
+-- | Input
 input   :: Int -> Signal
-signal  :: Double -> Signal
+
+-- | Lifted unary op
 lift    :: (Double -> Double) -> Signal -> Signal
+-- | Lifted binary op
 lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
-former  :: Signal -> Signal -> Signal -- run both in given order, return first arg
-latter  :: Signal -> Signal -> Signal -- run both in given order, return second arg
+-- | Run both in given order, return first arg
+former  :: Signal -> Signal -> Signal 
+-- | Run both in given order, return second arg
+latter  :: Signal -> Signal -> Signal 
+-- | Fixpoint with implicit 1 sample delay
 loop    :: (Signal -> Signal) -> Signal
-delay :: Int -> Signal -> Signal
+-- | An n-sample delay, where n > 0
+delay   :: Int -> Signal -> Signal
+
 time    = Time
 random  = Random
 input   = Input
-signal  = Constant
+constant  = Constant
 lift    = Lift "f"
 lift2   = Lift2 "f"
 lift'   = Lift
@@ -422,41 +435,36 @@ latter  = Lift2 "latter" (\_ x -> x)
 former  = Lift2 "former" (\x _ -> x)
 loop    = Loop
 delay   = Delay
--- delay 0 = id
--- delay n = delay1 . delay (n - 1)
---     where
---         delay1 = Delay 1
 
+impulse :: Signal
 impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 
--- Goes from (0-tau) n times per second.
--- Suitable for feeding a sine oscillator.
+-- | Goes from 0 to tau n times per second.
+--   Suitable for feeding a sine oscillator.
 line :: Double -> Signal
-line n = time*tau*signal n
-
--- Where did I get this?
--- See also http://www.musicdsp.org/files/Audio-EQ-Cookbook.txt
-
-lowPassC :: Floating a => a -> a -> a -> a -> (a, a, a, a, a)
-lowPassC fc fs q peakGain = (a0,a1,a2,b1,b2)
-    where
-        v = 10 ** abs peakGain / 20
-        k = tan (pi * fc / fs)
-       
-        norm = 1 / (1+k / q+k^2)
-        
-        a0 = k^2 * norm
-        a1 = 2 * a0
-        a2 = a0
-        b1 = 2 * (k^2 - 1) * norm
-        b2 = (1 - k / q + k^2) * norm
+line n = time*tau*constant n
 
 lowPass :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal
 lowPass fc fs q peakGain = biquad a0 a1 a2 b1 b2
     where                                                           
-        (a0,a1,a2,b1,b2) = lowPassC fc fs q peakGain
+        (a0,a1,a2,b1,b2) = lowPassCoeffs fc fs q peakGain
 
+        -- Where did I get this?
+        -- See also http://www.musicdsp.org/files/Audio-EQ-Cookbook.txt
 
+        lowPassCoeffs :: Floating a => a -> a -> a -> a -> (a, a, a, a, a)
+        lowPassCoeffs fc fs q peakGain = (a0,a1,a2,b1,b2)
+            where
+                v = 10 ** abs peakGain / 20
+                k = tan (pi * fc / fs)
+
+                norm = 1 / (1+k / q+k^2)
+
+                a0 = k^2 * norm
+                a1 = 2 * a0
+                a2 = a0
+                b1 = 2 * (k^2 - 1) * norm
+                b2 = (1 - k / q + k^2) * norm
 
 biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
 biquad b0 b1 b2 a1 a2 x = loop $ \y -> 
@@ -472,7 +480,6 @@ toFull x = (x*2)-1
 toPos  :: Fractional a => a -> a
 toPos x  = (x+1)/2
 
-
 -- Could be more general if not due to MonoMorph..R
 -- toBars :: RealFrac a => a -> String
 
@@ -486,6 +493,15 @@ toBars x = let n = round (toPos x * width) in
         width = 80
 
 
+tau                 = 2 * pi
+first  f (a,b)      = (f a, b)
+second f (a,b)      = (a, f b)
+swap (a,b)          = (b, a)
+dup x               = (x, x)
+
+
+--------------------------------------------------------------------------------
+-- Test
 
 main :: IO ()
 main = do
@@ -519,14 +535,6 @@ numSampls = sr * secs
 secs = 2
 sr   = 44100 -- TODO see stateRate above
 
-
-
-
-tau                 = 2 * pi
-first  f (a,b)      = (f a, b)
-second f (a,b)      = (a, f b)
-swap (a,b)          = (b, a)
-dup x               = (x, x)
 
 
 
