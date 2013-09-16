@@ -82,18 +82,25 @@ defState = State mempty mempty 0 44100 (mkStdGen 198712261455)
 -- prefilledBuses :: Map (Int,Int) Double
 -- prefilledBuses = Map.fromList $! [ (a,b) | a <- [1..1000], b <- [-1,-2..negate kMaxBuses]] `zip` (repeat 0)
 
--- channel state
+-- | @readSamp channel state@
 readSamp :: Int -> State -> Double
 readSamp c s = if c > 0 then readActualInput c s else readBus (neg c) s
 
--- delay channel value state
+-- | @writeSamp delay channel value state@
 writeSamp :: Int -> Int -> Double -> State -> State 
 writeSamp n c = writeBus n (neg c)
 
--- Advance state count
+-- | Advance state count
 incState :: State -> State
 incState x = x { stateCount = stateCount x + 1 }
 
+-- | Current time.
+stateTime :: State -> Double
+stateTime s = fromIntegral (stateCount s) / stateRate s
+
+-- | Random value
+stateRandom :: State -> (State, Double)
+stateRandom s = (s {stateRandomGen = g}, x) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
 
 --------------------------------------------------------------------------------
 -- Internal state stuff
@@ -271,8 +278,8 @@ simplify = go newPart
 step :: Signal -> State -> (State, Double)
 step = go
     where
-        go Random !s           = {-# SCC "random" #-}   (s {stateRandomGen = g}, x) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
-        go Time !s             = {-# SCC "time" #-}     (s, fromIntegral (stateCount s) / stateRate s) 
+        go Random !s           = {-# SCC "random" #-}   stateRandom s
+        go Time !s             = {-# SCC "time" #-}     (s, stateTime s) 
         go (Constant x) !s     = {-# SCC "constant" #-} (s, x)
  
         go (Lift _ f a) !s     = {-# SCC "lift" #-}     let 
