@@ -39,24 +39,22 @@ import qualified Data.Vector.Unboxed as Vector
 
 type Part a = (a,a) -- offset, diff
 
-newPart   :: Num a => Part a
-runPart :: Num a => Part a -> (Part a, a)
-splitPart :: Num a => Part a -> (Part a, Part a)
+newPart     :: Num a => Part a
+runPart     :: Num a => Part a -> (Part a, a)
+splitPart   :: Num a => Part a -> (Part a, Part a)
+nextP       :: Num a => Part a -> a
+skipP       :: Num a => Part a -> Part a
+runPartAll :: Num a => Part a -> [a]
 
 newPart         = (0,1)
-runPart (o,d) = ((o+d,d), o)
+runPart (o,d)   = ((o+d,d), o)
 splitPart (o,d) = ((o,d*2), (d,d*2))
-
-
-nextP :: Num a => Part a -> a
-skipP :: Num a => Part a -> Part a
-nextP = snd . runPart
-skipP = fst . runPart
-
-runPartAll :: Num a => Part a -> [a]
-runPartAll g = let
+nextP           = snd . runPart
+skipP           = fst . runPart
+runPartAll g    = let
     (g2,x) = runPart g
     in x : runPartAll g2
+
 
 --------------------------------------------------------------------------------
 -- Implementation
