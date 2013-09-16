@@ -33,31 +33,30 @@ import qualified Data.Vector.Unboxed as Vector
 -- Generate unique sets
 -- Laws:
 
--- > partition newPart = [1..]
--- > partitionAll a `merge` partitionAll b = partitionAll c   iff   (a,b) = splitPart c
--- > partitionAll A is distinct from partitionAll b
+-- > runPart newPart = [1..]
+-- > runPartAll a `merge` runPartAll b = runPartAll c   iff   (a,b) = splitPart c
+-- > runPartAll A is distinct from runPartAll b
 
 type Part a = (a,a) -- offset, diff
 
 newPart   :: Num a => Part a
-partition   :: Num a => Part a -> (Part a, a)
+runPart :: Num a => Part a -> (Part a, a)
 splitPart :: Num a => Part a -> (Part a, Part a)
 
-
-newPart           = (0,1)
-partition     (o,d) = ((o+d,d), o)
-splitPart   (o,d) = ((o,d*2), (d,d*2))
+newPart         = (0,1)
+runPart (o,d) = ((o+d,d), o)
+splitPart (o,d) = ((o,d*2), (d,d*2))
 
 
 nextP :: Num a => Part a -> a
 skipP :: Num a => Part a -> Part a
-nextP = snd . partition
-skipP = fst . partition
+nextP = snd . runPart
+skipP = fst . runPart
 
-partitionAll :: Num a => Part a -> [a]
-partitionAll g = let
-    (g2,x) = partition g
-    in x : partitionAll g2
+runPartAll :: Num a => Part a -> [a]
+runPartAll g = let
+    (g2,x) = runPart g
+    in x : runPartAll g2
 
 --------------------------------------------------------------------------------
 -- Implementation
@@ -476,7 +475,7 @@ toPos  :: Fractional a => a -> a
 toPos x  = (x+1)/2
 
 
--- Could be more partitioneral if not due to MonoMorph..R
+-- Could be more general if not due to MonoMorph..R
 -- toBars :: RealFrac a => a -> String
 
 -- | View as bars if in range (-1,1)
