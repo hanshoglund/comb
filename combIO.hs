@@ -113,10 +113,12 @@ stateRandom _ = randomRIO (-1,1)
 -- -- Internal state stuff
 
 readActualInput :: Int -> State -> IO Double 
-readActualInput c s = MVector.read (stateInputs s) c 
+readActualInput c s = MVector.unsafeRead (stateInputs s) c 
 
 readBus :: Int -> State -> IO Double 
-readBus c s = return 0
+readBus c s = do
+    bp <- bufferPointer s
+    MVector.unsafeRead (stateBuses s) (indexBus (bp, c))
 
 -- readBus c s = fromMaybe 0 $ 
 --     Map.lookup (bufferPointer s, c) (stateBuses s)
@@ -129,7 +131,10 @@ readBus c s = return 0
 -- -- Writing with delay n writes at (bufferPointer+n)
 -- 
 writeBus :: Int -> Int -> Double -> State -> IO ()
-writeBus n c x s = return ()
+writeBus n c x s = do
+    bp <- bufferPointer s
+    MVector.unsafeWrite (stateBuses s) (indexBus (bp + n, c)) x
+
 -- writeBus n c x s 
 --     | n <= 0    = error "writeBus: Negative or zero delay."
 --     | otherwise = s { stateBuses = Map.insert (bufferPointer s + n, c) x (stateBuses s) }
@@ -138,6 +143,9 @@ bufferPointer :: State -> IO Int
 bufferPointer s = do
     sc <- readIORef $ stateCount s
     return $ sc `mod` kMaxDelay
+
+indexBus :: (Int,Int) -> Int
+indexBus (n,c) = c*kMaxDelay + n
 
 kMaxBuses = 20
 kMaxDelay = 44100*60*5
@@ -545,9 +553,9 @@ main = do
 delaySec x = delay (round $ x*sr)
 major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 
-sig = sweep * (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
-    where
-        sweep = (sin $ line (1/(10*2)) `max` 0)
+-- sig = sweep * (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,11/12,13/14,15/16,17/18])
+    -- where
+        -- sweep = (sin $ line (1/(10*2)) `max` 0)
         
 -- sig = delay 0 (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9])
 -- sig = sin $ line freq
@@ -556,9 +564,9 @@ sig = sweep * (sum $ fmap (\x -> major $ line freq*x) [1,3/2,4/5,6/7,8/9,10/11,1
 -- sig = sin (line 440)*(sin (line$1/2))*0.1 + delaySec 0.1 (sin (line 440*3/5)*(sin (line$1/2))*0.1)
 -- sig = random
 
--- sig = lowPass (1000+5000*sweep) sr 0.01 6 $ random
-    -- where
-        -- sweep = (sin $ line (1/(10*2)) `max` 0)
+sig = lowPass (1000+5000*sweep) sr 0.01 6 $ random
+    where
+        sweep = (sin $ line (1/(10*2)) `max` 0)
 
 -- sig = (sum $ fmap (\x -> delaySec (x/10) impulse) [1..10])
 
