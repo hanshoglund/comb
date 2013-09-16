@@ -90,6 +90,13 @@ readSamp c s = if c > 0 then readActualInput c s else readBus (neg c) s
 writeSamp :: Int -> Int -> Double -> State -> State 
 writeSamp n c = writeBus n (neg c)
 
+-- Advance state count
+incState :: State -> State
+incState x = x { stateCount = stateCount x + 1 }
+
+
+--------------------------------------------------------------------------------
+-- Internal state stuff
 
 readActualInput :: Int -> State -> Double 
 readActualInput c s = fromMaybe 0 $ 
@@ -98,16 +105,6 @@ readActualInput c s = fromMaybe 0 $
 readBus :: Int -> State -> Double 
 readBus c s = fromMaybe 0 $ 
     Map.lookup (bufferPointer s, c) (stateBuses s)
-
--- Advance state count
-incState :: State -> State
-incState x = x { stateCount = stateCount x + 1 }
-
-bufferPointer :: State -> Int
-bufferPointer s = stateCount s `mod` kMaxDelay
-
-kMaxBuses = 20
-kMaxDelay = 44100*60*5
 
 -- Write with some delay.
 -- Buses are always read at bufferPointer
@@ -119,6 +116,14 @@ writeBus :: Int -> Int -> Double -> State -> State
 writeBus n c x s 
     | n <= 0    = error "writeBus: Negative or zero delay."
     | otherwise = s { stateBuses = Map.insert (bufferPointer s + n, c) x (stateBuses s) }
+
+bufferPointer :: State -> Int
+bufferPointer s = stateCount s `mod` kMaxDelay
+
+kMaxBuses = 20
+kMaxDelay = 44100*60*5
+
+--------------------------------------------------------------------------------
 
 
 data Signal
