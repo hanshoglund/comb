@@ -60,7 +60,7 @@ partitionAll g = let
     in x : partitionAll g2
 
 --------------------------------------------------------------------------------
--- Partitions
+-- Implementation
 
 --  A signal is a function of inputs and time over some local state
 --  Note that input/outputs may include global buffers
@@ -143,123 +143,6 @@ data Signal
 
     -- only used for feedback for now
     | Output Int Int Signal
-
-instance Eq Signal where
-    (==) = error "No (==)"
-instance Ord Signal where
-    compare = error "No compare"
-    max = lift2' "max" max
-    min = lift2' "min" min
-instance Num Signal where
-    (+) = lift2' "(+)" (+)
-    (*) = lift2' "(*)" (*)
-    (-) = lift2' "(-)" (-)
-    abs           = lift' "abs" abs
-    signum        = lift' "signum" signum
-    fromInteger x = signal (fromInteger x)
-instance Fractional Signal where
-    recip = lift' "recip" recip
-    (/)   = lift2' "(/)" (/)
-    fromRational x = signal (fromRational x)
-instance Show Signal where
-    show = drawTree . signalTree
-instance Floating Signal where
-    pi      = signal pi
-    exp     = lift' "exp" exp
-    sqrt    = lift' "sqrt" sqrt
-    log     = lift' "log" log
-    (**)    = lift2' "(**)" (**)
-    logBase = lift2' "logBase" logBase
-    sin     = lift' "sin" sin
-    tan     = lift' "tan" tan
-    cos     = lift' "cos" cos
-    asin    = lift' "asin" asin
-    atan    = lift' "atan" atan
-    acos    = lift' "acos" acos
-    sinh    = lift' "sinh" sinh
-    tanh    = lift' "tanh" tanh
-    cosh    = lift' "cosh" cosh
-    asinh   = lift' "asinh" asinh
-    atanh   = lift' "atanh" atanh
-    acosh   = lift' "acosh" acosh
-
-
-signalNodeCount :: Signal -> Int
-signalNodeCount x = getSum $ foldMap (const (Sum 1)) $ signalTree x
-
-signalTree :: Signal -> Tree String
-signalTree = go . simplify
-    where
-        go Time             = Node "time" []
-        go Random           = Node "random" []
-        go (Constant x)     = Node (show x) []
-        go (Lift n _ a)     = Node n [signalTree a]
-        go (Lift2 n _ a b)  = Node n [signalTree a, signalTree b]
-        go (Input c)        = Node ("input " ++ show c) []
-        go (Output n c a)   = Node ("output " ++ show c ++ "[-"++show n++"]") [signalTree a] 
-
-time    :: Signal
-random  :: Signal
-input   :: Int -> Signal
-signal  :: Double -> Signal
-lift    :: (Double -> Double) -> Signal -> Signal
-lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
-former  :: Signal -> Signal -> Signal -- run both in given order, return first arg
-latter  :: Signal -> Signal -> Signal -- run both in given order, return second arg
-loop    :: (Signal -> Signal) -> Signal
-delay :: Int -> Signal -> Signal
-time    = Time
-random  = Random
-input   = Input
-signal  = Constant
-lift    = Lift "f"
-lift2   = Lift2 "f"
-lift'   = Lift
-lift2'  = Lift2
-latter  = Lift2 "latter" (\_ x -> x)
-former  = Lift2 "former" (\x _ -> x)
-loop    = Loop
-delay   = Delay
--- delay 0 = id
--- delay n = delay1 . delay (n - 1)
---     where
---         delay1 = Delay 1
-
-impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
-
--- Goes from (0-tau) n times per second.
--- Suitable for feeding a sine oscillator.
-line :: Double -> Signal
-line n = time*tau*signal n
-
--- Where did I get this?
--- See also http://www.musicdsp.org/files/Audio-EQ-Cookbook.txt
-
-lowPassC :: Floating a => a -> a -> a -> a -> (a, a, a, a, a)
-lowPassC fc fs q peakGain = (a0,a1,a2,b1,b2)
-    where
-        v = 10 ** abs peakGain / 20
-        k = tan (pi * fc / fs)
-       
-        norm = 1 / (1+k / q+k^2)
-        
-        a0 = k^2 * norm
-        a1 = 2 * a0
-        a2 = a0
-        b1 = 2 * (k^2 - 1) * norm
-        b2 = (1 - k / q + k^2) * norm
-
-lowPass :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal
-lowPass fc fs q peakGain = biquad a0 a1 a2 b1 b2
-    where                                                           
-        (a0,a1,a2,b1,b2) = lowPassC fc fs q peakGain
-
-
-
-biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
-biquad b0 b1 b2 a1 a2 x = loop $ \y -> 
-    b0*x + b1 * delay 1 x + b2 * delay 2 x 
-         - a1 * delay 1 y - a2 * delay 2 y
 
 -- |
 -- Recursively remove signal constructors not handled by 'step'.
@@ -414,28 +297,22 @@ isConstant = go
 areConstant :: [Signal] -> Bool
 areConstant = getAll . mconcat . fmap (All . isConstant)
 
+signalNodeCount :: Signal -> Int
+signalNodeCount x = getSum $ foldMap (const (Sum 1)) $ signalTree x
 
--- | From range (0,1) to range (-1,1)
-toFull :: Num a => a -> a
-toFull x = (x*2)-1
+signalTree :: Signal -> Tree String
+signalTree = go . simplify
+    where
+        go Time             = Node "time" []
+        go Random           = Node "random" []
+        go (Constant x)     = Node (show x) []
+        go (Lift n _ a)     = Node n [signalTree a]
+        go (Lift2 n _ a b)  = Node n [signalTree a, signalTree b]
+        go (Input c)        = Node ("input " ++ show c) []
+        go (Output n c a)   = Node ("output " ++ show c ++ "[-"++show n++"]") [signalTree a] 
 
--- | From range (-1,1) to range (0,1)
-toPos  :: Fractional a => a -> a
-toPos x  = (x+1)/2
 
-
--- Could be more partitioneral if not due to MonoMorph..R
--- toBars :: RealFrac a => a -> String
-
--- | View as bars if in range (-1,1)
-toBars :: Double -> String
-toBars x = let n = round (toPos x * width) in
-    if n > width || n < 0
-        then replicate (width+1) ' ' ++ "|"
-        else replicate n ' ' ++ "." ++ replicate (width-n) ' ' ++ "|"
-    where 
-        width = 80
-
+--------------------------------------------------------------------------------
 
 -- Sndfile I/O
 
@@ -481,6 +358,137 @@ writeSignal path a = do
                     sections    = 1,
                     seekable    = True
                 }
+                           
+
+--------------------------------------------------------------------------------
+
+-- API
+
+instance Eq Signal where
+    (==) = error "No (==)"
+instance Ord Signal where
+    compare = error "No compare"
+    max = lift2' "max" max
+    min = lift2' "min" min
+instance Num Signal where
+    (+) = lift2' "(+)" (+)
+    (*) = lift2' "(*)" (*)
+    (-) = lift2' "(-)" (-)
+    abs           = lift' "abs" abs
+    signum        = lift' "signum" signum
+    fromInteger x = signal (fromInteger x)
+instance Fractional Signal where
+    recip = lift' "recip" recip
+    (/)   = lift2' "(/)" (/)
+    fromRational x = signal (fromRational x)
+instance Show Signal where
+    show = drawTree . signalTree
+instance Floating Signal where
+    pi      = signal pi
+    exp     = lift' "exp" exp
+    sqrt    = lift' "sqrt" sqrt
+    log     = lift' "log" log
+    (**)    = lift2' "(**)" (**)
+    logBase = lift2' "logBase" logBase
+    sin     = lift' "sin" sin
+    tan     = lift' "tan" tan
+    cos     = lift' "cos" cos
+    asin    = lift' "asin" asin
+    atan    = lift' "atan" atan
+    acos    = lift' "acos" acos
+    sinh    = lift' "sinh" sinh
+    tanh    = lift' "tanh" tanh
+    cosh    = lift' "cosh" cosh
+    asinh   = lift' "asinh" asinh
+    atanh   = lift' "atanh" atanh
+    acosh   = lift' "acosh" acosh  
+
+time    :: Signal
+random  :: Signal
+input   :: Int -> Signal
+signal  :: Double -> Signal
+lift    :: (Double -> Double) -> Signal -> Signal
+lift2   :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
+former  :: Signal -> Signal -> Signal -- run both in given order, return first arg
+latter  :: Signal -> Signal -> Signal -- run both in given order, return second arg
+loop    :: (Signal -> Signal) -> Signal
+delay :: Int -> Signal -> Signal
+time    = Time
+random  = Random
+input   = Input
+signal  = Constant
+lift    = Lift "f"
+lift2   = Lift2 "f"
+lift'   = Lift
+lift2'  = Lift2
+latter  = Lift2 "latter" (\_ x -> x)
+former  = Lift2 "former" (\x _ -> x)
+loop    = Loop
+delay   = Delay
+-- delay 0 = id
+-- delay n = delay1 . delay (n - 1)
+--     where
+--         delay1 = Delay 1
+
+impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
+
+-- Goes from (0-tau) n times per second.
+-- Suitable for feeding a sine oscillator.
+line :: Double -> Signal
+line n = time*tau*signal n
+
+-- Where did I get this?
+-- See also http://www.musicdsp.org/files/Audio-EQ-Cookbook.txt
+
+lowPassC :: Floating a => a -> a -> a -> a -> (a, a, a, a, a)
+lowPassC fc fs q peakGain = (a0,a1,a2,b1,b2)
+    where
+        v = 10 ** abs peakGain / 20
+        k = tan (pi * fc / fs)
+       
+        norm = 1 / (1+k / q+k^2)
+        
+        a0 = k^2 * norm
+        a1 = 2 * a0
+        a2 = a0
+        b1 = 2 * (k^2 - 1) * norm
+        b2 = (1 - k / q + k^2) * norm
+
+lowPass :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal
+lowPass fc fs q peakGain = biquad a0 a1 a2 b1 b2
+    where                                                           
+        (a0,a1,a2,b1,b2) = lowPassC fc fs q peakGain
+
+
+
+biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
+biquad b0 b1 b2 a1 a2 x = loop $ \y -> 
+    b0*x + b1 * delay 1 x + b2 * delay 2 x 
+         - a1 * delay 1 y - a2 * delay 2 y
+
+
+-- | From range (0,1) to range (-1,1)
+toFull :: Num a => a -> a
+toFull x = (x*2)-1
+
+-- | From range (-1,1) to range (0,1)
+toPos  :: Fractional a => a -> a
+toPos x  = (x+1)/2
+
+
+-- Could be more partitioneral if not due to MonoMorph..R
+-- toBars :: RealFrac a => a -> String
+
+-- | View as bars if in range (-1,1)
+toBars :: Double -> String
+toBars x = let n = round (toPos x * width) in
+    if n > width || n < 0
+        then replicate (width+1) ' ' ++ "|"
+        else replicate n ' ' ++ "." ++ replicate (width-n) ' ' ++ "|"
+    where 
+        width = 80
+
+
 
 main :: IO ()
 main = do
