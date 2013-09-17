@@ -4,6 +4,8 @@
 -- |
 -- Reference implementation, using a pure state monad.
 --
+-- Should not be used except for testing and validating new functionality.
+--
 module Sound.Comb.Prim.Ref (
         State,
         defState,

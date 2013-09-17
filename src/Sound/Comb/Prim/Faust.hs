@@ -1,5 +1,16 @@
 
-
+-- |
+-- Faust-based implementation and export utilities.
+--                                                    
+-- This implementation is very fast but has some limitations:
+--
+-- * Non real-time only.
+--
+-- * It requires an installation of Faust and a C++ compiler.
+--
+-- * It does not support arbitrary lifed expressions. Standard operators
+--   are fine.
+--
 module Sound.Comb.Prim.Faust where
 
 import System.Process
@@ -50,10 +61,10 @@ signalToFaust a = prefix ++ "process = " ++ go 0 a ++ ";\n\n"
 
 
 
-drawSignalFaust :: Signal -> IO ()
-drawSignalFaust a = do
+drawSignalFaust :: FilePath -> Signal -> IO ()
+drawSignalFaust path a = do
     writeFile "test.dsp" (signalToFaust a)
-    system "faust2svg test.dsp"
+    system $ "faust2svg " ++ path
     -- system "open test-svg/process.svg"
     return ()
 
