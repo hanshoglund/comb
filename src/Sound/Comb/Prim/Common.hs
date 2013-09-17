@@ -34,23 +34,39 @@ import qualified Data.Vector.Unboxed.Mutable as MVector
 
 import Sound.Comb.Util.Part
 import Sound.Comb.Util.Misc
-    
+
+-- |
+-- Primitive signals.
+--
+-- Each signal represents one channel of audio. The 'Input' and 'Output' constructors
+-- represent a single read or write to a global bus. Non-negative bus numbers indicate
+-- global input (i.e index into the list of incoming sample sequences). Reading or writing
+-- from a non-existent buffer should result in 0 and implementations must assure this either
+-- by allocating zeroed memory or testing for non-existent buffer channels.
+--
+-- The output sequence of samples is a function of all inputs, 
+-- semantically @[[Double]] -> [Double]@.
+--    
 data Signal
+    -- | Elapsed time in seconds.
     = Time
+    -- | A random value in the range @(-1,1)@.
     | Random
+    -- | A constant value.
     | Constant Double
+    -- | Lifted function with optional name.
     | Lift  String (Double -> Double) Signal                  -- string is optional name
     | Lift2 String (Double -> Double -> Double) Signal Signal -- string is optional name
 
+    -- | Fixpoint.
     | Loop (Signal -> Signal)
+    -- | Delay.
     | Delay Int Signal
 
-    -- >= 0 means real (global) input
-    -- <  0 means local (feedback) input
+    -- | Input.
     | Input Int 
 
-    -- >= 0 means real (global) input
-    -- < 0 mean feedback output
+    -- | Output.
     | Output Int Int Signal
 
 isVariable :: Signal -> Bool
@@ -145,6 +161,7 @@ optimize1 = go
 -- Currently, it replaces:
 --
 --   * All loops with local input/outputs
+--
 --   * All delays with local input/output pair
 --
 simplify :: Signal -> Signal

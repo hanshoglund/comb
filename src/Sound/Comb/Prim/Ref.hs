@@ -1,6 +1,9 @@
 
 {-# LANGUAGE NoMonomorphismRestriction, BangPatterns, MultiParamTypeClasses #-}
 
+-- |
+-- Reference implementation, using a pure state monad.
+--
 module Sound.Comb.Prim.Ref (
         State,
         defState,

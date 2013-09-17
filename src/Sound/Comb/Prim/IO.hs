@@ -1,6 +1,10 @@
 
 {-# LANGUAGE NoMonomorphismRestriction, BangPatterns, MultiParamTypeClasses #-}
 
+-- |
+-- This implementation is similar to "Sound.Comb.Prim.Ref", but runs all state
+-- in 'IO'.
+--
 module Sound.Comb.Prim.IO (
         State,
         newState,

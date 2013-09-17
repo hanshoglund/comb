@@ -4,6 +4,8 @@ module Sound.Comb.Util.Part where
 -- | 
 -- Represents a partition of the set of positive integers, here generalized to work with
 -- arbitrary 'Num' types.
+--
+-- Used internally for buffer allocation.
 -- 
 -- > runPart defPart = [1..]
 -- > sort (runPartAll a ++ runPartAll b) = runPartAll c, iff (a,b) = splitPart c
