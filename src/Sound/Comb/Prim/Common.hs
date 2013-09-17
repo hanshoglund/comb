@@ -8,7 +8,7 @@ import Data.Monoid
 import Data.Maybe
 import Data.IORef
 import Data.Foldable (foldMap)
-import Foreign hiding (newPart)
+import Foreign hiding (defPart)
 import Control.Monad (forM_)
 import Data.List (mapAccumL, transpose, unfoldr)
 import Data.Tree      
@@ -148,20 +148,18 @@ optimize1 = go
 --   * All delays with local input/output pair
 --
 simplify :: Signal -> Signal
-simplify = go newPart
+simplify = go defPart
     where
         go g (Loop f)        = out $ go h (f inp)
             where                     
                 out   = Output 1 i
                 inp   = Input i
-                i     = neg $ nextP g
-                h     = skipP g
+                (i, h) = first neg $ runPart g
         go g (Delay n a)        = inp `former` out
             where
                 out = Output n i (go h a)
                 inp = Input i
-                i   = neg $ nextP g
-                h   = skipP g                
+                (i, h) = first neg $ runPart g
                 former  = Lift2 "former" (\x _ -> x)
                 
                 

@@ -17,7 +17,7 @@ import Data.Monoid
 import Data.Maybe
 import Data.IORef
 import Data.Foldable (foldMap)
-import Foreign hiding (newPart)
+import Foreign hiding (defPart)
 import Control.Monad (forM_)
 import Data.List (mapAccumL, transpose, unfoldr)
 import Data.Tree      
