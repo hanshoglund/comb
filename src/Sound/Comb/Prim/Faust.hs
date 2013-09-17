@@ -71,8 +71,6 @@ drawSignalFaust path a = do
 
 writeSignal :: FilePath -> Signal -> IO ()
 writeSignal path a = do   
-    drawSignalFaust a -- DEBUG
-    
     writeFile "test.dsp" (signalToFaust a)
 
     -- TODO assure dir and input file
@@ -80,8 +78,6 @@ writeSignal path a = do
     
     system "c++ -lsndfile -O3 test-sndfile/test.cpp -o test-sndfile/test"
     system $ "test-sndfile/test test-sndfile/in.wav " ++ "./" ++ path
-
-    system $ "open " ++ path -- DEBUG
     return ()
 
 
