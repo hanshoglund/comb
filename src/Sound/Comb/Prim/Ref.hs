@@ -15,19 +15,16 @@ module Sound.Comb.Prim.Ref (
         writeSignal
 ) where
 
-import Data.Int
 import Data.Monoid
 import Data.Maybe
 import Data.IORef
-import Data.Foldable (foldMap)
 import Foreign hiding (defPart)
 import Control.Monad (forM_)
 import Data.List (mapAccumL, transpose, unfoldr)
-import Data.Tree      
 import System.Random hiding (random)
-import Sound.File.Sndfile
 
--- import Sound.PortAudio
+import Sound.PortAudio
+import Sound.File.Sndfile
 import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
 import Control.Concurrent (threadDelay)
 

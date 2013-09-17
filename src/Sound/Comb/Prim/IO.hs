@@ -16,34 +16,18 @@ module Sound.Comb.Prim.IO (
         writeSignal
 ) where
 
-import Data.Int
-import Data.Monoid
-import Data.Maybe
-import Data.IORef
-import Data.Foldable (foldMap)
-import Foreign hiding (defPart)
 import Control.Monad (forM_)
-import Data.List (mapAccumL, transpose, unfoldr)
-import Data.Tree      
-import System.Random hiding (random)
-import Sound.File.Sndfile
-
--- import Sound.PortAudio
-import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
-import Control.Concurrent (threadDelay)
-
-import Data.Map (Map)
-import qualified Data.Map as Map
-
+import Data.IORef
 import Data.Vector.Unboxed (Vector, MVector)
 import Data.Vector.Unboxed.Mutable (IOVector)
+import System.Random
+import Foreign hiding (defPart)
 import qualified Data.Vector.Unboxed as Vector
 import qualified Data.Vector.Unboxed.Mutable as MVector
 
-
-
-
-
+import Sound.File.Sndfile
+import Sound.PortAudio
+import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
 
 import Sound.Comb.Prim.Common
 import Sound.Comb.Util.Part
