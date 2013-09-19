@@ -32,6 +32,9 @@ module Sound.Comb.Prim.Common (
         lift',
         lift2',
 
+        -- ** Arithmetic
+        mod',
+
         -- ** Special
         former,
         latter,
@@ -54,6 +57,7 @@ import Data.Monoid
 import Data.Maybe
 import Data.Foldable (foldMap)
 import Data.Tree
+import qualified Data.Fixed as Fixed
 import Sound.File.Sndfile
 
 import Sound.Comb.Util.Part
@@ -367,6 +371,9 @@ latter  = Lift2 "latter" (\_ x -> x)
 former  = Lift2 "former" (\x _ -> x)
 loop    = Loop
 delay   = Delay
+
+mod' :: Signal -> Signal -> Signal
+mod' = lift2' "divMod" Fixed.mod'
 
 -- |
 -- The impulse function: @1@ at time @0@, otherwise @0@.
