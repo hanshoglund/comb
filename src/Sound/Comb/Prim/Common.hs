@@ -1,7 +1,33 @@
 
 {-# LANGUAGE NoMonomorphismRestriction, BangPatterns, MultiParamTypeClasses #-}
 
-module Sound.Comb.Prim.Common where
+module Sound.Comb.Prim.Common (
+        Signal(..),
+        isVariable,
+        isConstant,
+        areConstant,
+        signalNodeCount,
+        signalTree,
+        optimize,
+        optimize1,
+        simplify,
+        time,
+        random,
+        input,
+        constant,
+        lift,
+        lift2,
+        lift',
+        lift2',
+        latter,
+        former,
+        loop,
+        delay,
+        impulse,
+        line,
+        lowPass,
+        biquad,
+) where
 
 import Data.Int
 import Data.Monoid
@@ -268,10 +294,16 @@ lift        :: (Double -> Double) -> Signal -> Signal
 -- | Lifted binary op
 lift2       :: (Double -> Double -> Double) -> Signal -> Signal -> Signal
 
--- | Run both in given order, return first arg
+-- | Lifted unary op with a specific name.
+lift'       :: String -> (Double -> Double) -> Signal -> Signal
+
+-- | Lifted binary op with a specific name.
+lift2'      :: String -> (Double -> Double -> Double) -> Signal -> Signal -> Signal
+
+-- | Run both in given order, return the value of the first argument.
 former      :: Signal -> Signal -> Signal 
 
--- | Run both in given order, return second arg
+-- | Run both in given order, return the value of the second argument.
 latter      :: Signal -> Signal -> Signal 
 
 -- | Fixpoint with implicit 1 sample delay
