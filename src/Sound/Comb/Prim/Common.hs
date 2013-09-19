@@ -2,61 +2,57 @@
 {-# LANGUAGE NoMonomorphismRestriction, BangPatterns, MultiParamTypeClasses #-}
 
 module Sound.Comb.Prim.Common (
+        -- * Signal type
         Signal(..),
+
+        -- * Inspecting and running signals
         isVariable,
         isConstant,
         areConstant,
         signalNodeCount,
-        signalTree,
+        signalTree,                         
+        
+        -- ** Optimization
         optimize,
-        optimize1,
-        simplify,
+        optimize1,       
+        
+        -- ** Simplification
+        simplify,       
+        
+        -- * Signal primitives
+        -- ** Basic signals
         time,
         random,
-        input,
         constant,
         lift,
         lift2,
         lift',
         lift2',
+
+        -- ** Special
         latter,
         former,
+
+        -- ** Delay and feedback
         loop,
         delay,
+        input,
+
+        -- ** Utilities
         impulse,
         line,
+        saw,
+        saw',
+        square,
         lowPass,
         biquad,
 ) where
 
-import Data.Int
 import Data.Monoid
 import Data.Maybe
-import Data.IORef
 import Data.Foldable (foldMap)
-import Foreign hiding (defPart)
-import Control.Monad (forM_)
-import Data.List (mapAccumL, transpose, unfoldr)
 import Data.Tree      
-import System.Random hiding (random)
 import Sound.File.Sndfile
-
--- import Sound.PortAudio
-import Sound.PortAudio.Base(PaStreamCallbackTimeInfo)
-import Control.Concurrent (threadDelay)
-
-import Data.Map (Map)
-import qualified Data.Map as Map
-
-import Data.Vector.Unboxed (Vector, MVector)
-import Data.Vector.Unboxed.Mutable (IOVector)
-import qualified Data.Vector.Unboxed as Vector
-import qualified Data.Vector.Unboxed.Mutable as MVector
-
-
-
-
-
 
 import Sound.Comb.Util.Part
 import Sound.Comb.Util.Misc
@@ -148,6 +144,9 @@ optimize = rec . optimize1
         rec (Output n c a)   = Output n c (optimize a)
         rec a                = a
 
+-- |
+-- Perform one optimization step.
+--
 optimize1 :: Signal -> Signal
 optimize1 = go
     where
@@ -284,7 +283,7 @@ random      :: Signal
 -- | Constant value
 constant    :: Double -> Signal
 
--- | Input
+-- | Read input from the given bus.
 input       :: Int -> Signal
 
 
@@ -332,10 +331,28 @@ impulse :: Signal
 impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 
 -- | 
--- Goes from 0 to tau during @(1/x)@ seconds. Suitable for feeding a sine oscillator.
+-- Goes from 0 to tau during @(1/x)@ seconds. Suitable for feeding an oscillator, i.e.
+--
+-- > sin (line 440)
 -- 
 line :: Double -> Signal
 line n = time*tau*constant n
+
+-- | 
+-- Goes from @-1@ to 1 during @(1/x)@ seconds. Suitable for feeding an oscillator, i.e.
+--
+-- > sin (line 440)
+-- 
+saw :: Double -> Signal
+saw n = toFull (saw' n)
+
+-- | 
+-- Goes from 0 to 1 during @(1/x)@ seconds. Suitable for feeding an oscillator, i.e.
+--
+-- > sin (line 440)
+-- 
+saw' :: Double -> Signal
+saw' n = time*1*constant n
 
 -- | 
 -- Low-pass filter, based on 'biquad'.
