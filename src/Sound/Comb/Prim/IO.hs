@@ -44,10 +44,10 @@ data State  = State {
 
         -- Current and previous bus values (index [-1,-2..])
         stateBuses      :: IOVector Double,
+        
         stateCount      :: IORef Int,
         stateRate       :: IORef Double
     }
-    -- deriving (Show)
 
 newState :: IO State
 newState = do
