@@ -92,24 +92,17 @@ readBus c s = do
     bp <- bufferPointer s
     MVector.unsafeRead (stateBuses s) (indexBus (bp, c))
 
--- readBus c s = fromMaybe 0 $
---     Map.lookup (bufferPointer s, c) (stateBuses s)
+{-
+Write with some delay.
+Buses are always read at bufferPointer
 
---
--- -- Write with some delay.
--- -- Buses are always read at bufferPointer
--- --
--- -- Writing with delay 0 is an error
--- -- Writing with delay n writes at (bufferPointer+n)
---
+Writing with delay 0 is an error
+Writing with delay n writes at (bufferPointer+n)
+-}
 writeBus :: Int -> Int -> Double -> State -> IO ()
 writeBus n c x s = do
     bp <- bufferPointer s
     MVector.unsafeWrite (stateBuses s) (indexBus (bp + n, c)) x
-
--- writeBus n c x s
---     | n <= 0    = error "writeBus: Negative or zero delay."
---     | otherwise = s { stateBuses = Map.insert (bufferPointer s + n, c) x (stateBuses s) }
 
 bufferPointer :: State -> IO Int
 bufferPointer s = do
