@@ -10,15 +10,15 @@ module Sound.Comb.Prim.Common (
         isConstant,
         areConstant,
         signalNodeCount,
-        signalTree,                         
-        
+        signalTree,
+
         -- ** Optimization
         optimize,
-        optimize1,       
-        
+        optimize1,
+
         -- ** Simplification
-        simplify,       
-        
+        simplify,
+
         -- * Signal primitives
         -- ** Basic signals
         time,
@@ -50,7 +50,7 @@ module Sound.Comb.Prim.Common (
 import Data.Monoid
 import Data.Maybe
 import Data.Foldable (foldMap)
-import Data.Tree      
+import Data.Tree
 import Sound.File.Sndfile
 
 import Sound.Comb.Util.Part
@@ -65,9 +65,9 @@ import Sound.Comb.Util.Misc
 -- from a non-existent buffer should result in 0 and implementations must assure this either
 -- by allocating zeroed memory or testing for non-existent buffer channels.
 --
--- The output sequence of samples is a function of all inputs, 
+-- The output sequence of samples is a function of all inputs,
 -- semantically @[[Double]] -> [Double]@.
---    
+--
 data Signal
     -- | Elapsed time in seconds.
     = Time
@@ -85,7 +85,7 @@ data Signal
     | Delay Int Signal
 
     -- | Input.
-    | Input Int 
+    | Input Int
 
     -- | Output.
     | Output Int Int Signal
@@ -130,8 +130,8 @@ signalTree = go . simplify
         go (Lift n _ a)     = Node n [signalTree a]
         go (Lift2 n _ a b)  = Node n [signalTree a, signalTree b]
         go (Input c)        = Node ("input " ++ show c) []
-        go (Output n c a)   = Node ("output " ++ show c ++ "[-"++show n++"]") [signalTree a] 
-                                                                                                   
+        go (Output n c a)   = Node ("output " ++ show c ++ "[-"++show n++"]") [signalTree a]
+
 -- |
 -- Optimize a signal. Only works on simplified signals.
 --
@@ -169,7 +169,7 @@ optimize1 = go
 
         -- Reordering
         -- TODO generalize to all commutative ops
-        
+
         -- a * (x[n] * b) => x[n] * (a * b)
         -- a * (b * x[n]) => x[n] * (a * b)
         -- (x[n] * a) * b => x[n] * (a * b)
@@ -193,11 +193,11 @@ optimize1 = go
         --  * Fusion (not for Faust backend!)
 
         go a = a
-                  
+
 
 -- |
 -- Recursively remove signal constructors not handled by 'step'.
--- 
+--
 -- Currently, it replaces:
 --
 --   * All loops with local input/outputs
@@ -208,7 +208,7 @@ simplify :: Signal -> Signal
 simplify = go defPart
     where
         go g (Loop f)        = out $ go h (f inp)
-            where                     
+            where
                 out   = Output 1 i
                 inp   = Input i
                 (i, h) = first neg $ runPart g
@@ -218,13 +218,13 @@ simplify = go defPart
                 inp = Input i
                 (i, h) = first neg $ runPart g
                 former  = Lift2 "former" (\x _ -> x)
-                
-                
+
+
         go g (Lift n f a)     = Lift n f (go g a)
         go g (Lift2 n f a b)  = Lift2 n f (go g1 a) (go g2 b) where (g1, g2) = splitPart g
         -- Note: splitPart is unnecessary if evaluation is sequential
 
-        go g x = x                                     
+        go g x = x
 
 
 
@@ -271,7 +271,7 @@ instance Floating Signal where
     cosh            = lift' "cosh" cosh
     asinh           = lift' "asinh" asinh
     atanh           = lift' "atanh" atanh
-    acosh           = lift' "acosh" acosh  
+    acosh           = lift' "acosh" acosh
 
 -- | Number of seconds elapsed
 time        :: Signal
@@ -299,10 +299,10 @@ lift'       :: String -> (Double -> Double) -> Signal -> Signal
 lift2'      :: String -> (Double -> Double -> Double) -> Signal -> Signal -> Signal
 
 -- | Run both in given order, return the value of the first argument.
-former      :: Signal -> Signal -> Signal 
+former      :: Signal -> Signal -> Signal
 
 -- | Run both in given order, return the value of the second argument.
-latter      :: Signal -> Signal -> Signal 
+latter      :: Signal -> Signal -> Signal
 
 -- | Fixpoint with implicit 1 sample delay
 loop        :: (Signal -> Signal) -> Signal
@@ -323,42 +323,42 @@ former  = Lift2 "former" (\x _ -> x)
 loop    = Loop
 delay   = Delay
 
--- | 
+-- |
 -- The impulse function: @1@ at time @0@, otherwise @0@.
 --
 impulse :: Signal
 impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 
--- | 
+-- |
 -- Goes from 0 to tau during @(1/x)@ seconds. Suitable for feeding an oscillator, i.e.
 --
 -- > sin (line 440)
--- 
+--
 line :: Double -> Signal
 line n = time*tau*constant n
 
--- | 
+-- |
 -- Goes from @-1@ to 1 during @(1/x)@ seconds. Suitable for feeding an oscillator, i.e.
 --
 -- > sin (line 440)
--- 
+--
 saw :: Double -> Signal
 saw n = toFull (saw' n)
 
--- | 
+-- |
 -- Goes from 0 to 1 during @(1/x)@ seconds. Suitable for feeding an oscillator, i.e.
 --
 -- > sin (line 440)
--- 
+--
 saw' :: Double -> Signal
 saw' n = time*1*constant n
 
--- | 
+-- |
 -- Low-pass filter, based on 'biquad'.
--- 
+--
 lowPass :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal
 lowPass fc fs q peakGain = biquad a0 a1 a2 b1 b2
-    where                                                           
+    where
         (a0,a1,a2,b1,b2) = lowPassCoeffs fc fs q peakGain
 
         -- Where did I get this?
@@ -378,11 +378,11 @@ lowPass fc fs q peakGain = biquad a0 a1 a2 b1 b2
                 b1 = 2 * (k^2 - 1) * norm
                 b2 = (1 - k / q + k^2) * norm
 
--- | 
+-- |
 -- A biquad filter.
--- 
+--
 biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
-biquad b0 b1 b2 a1 a2 x = loop $ \y -> 
-    b0*x + b1 * delay 1 x + b2 * delay 2 x 
+biquad b0 b1 b2 a1 a2 x = loop $ \y ->
+    b0*x + b1 * delay 1 x + b2 * delay 2 x
          - a1 * delay 1 y - a2 * delay 2 y
 

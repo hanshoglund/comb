@@ -52,12 +52,12 @@ import Sound.Comb.Prim.Common
 data State  = State {
         -- Current input values (index [0,1..])
         stateInputs     :: Map Int Double,
-        
+
         -- Current and previous bus values (index [-1,-2..])
         stateBuses      :: Map (Int,Int) Double,
         stateCount      :: Int,             -- processed samples
         stateRate       :: Double,          -- samples per second
-        
+
         stateRandomGen  :: StdGen           -- random number source
     }
     deriving (Show)
@@ -70,7 +70,7 @@ readSamp :: Int -> State -> Double
 readSamp c s = if c > 0 then readActualInput c s else readBus (neg c) s
 
 -- | @writeSamp delay channel value state@
-writeSamp :: Int -> Int -> Double -> State -> State 
+writeSamp :: Int -> Int -> Double -> State -> State
 writeSamp n c = writeBus n (neg c)
 
 -- | Advance state count
@@ -88,12 +88,12 @@ stateRandom s = (x, s {stateRandomGen = g}) where (x, g) = randomR (-1,1::Double
 --------------------------------------------------------------------------------
 -- Internal state stuff
 
-readActualInput :: Int -> State -> Double 
-readActualInput c s = fromMaybe 0 $ 
-    Map.lookup c (stateInputs s) 
+readActualInput :: Int -> State -> Double
+readActualInput c s = fromMaybe 0 $
+    Map.lookup c (stateInputs s)
 
-readBus :: Int -> State -> Double 
-readBus c s = fromMaybe 0 $ 
+readBus :: Int -> State -> Double
+readBus c s = fromMaybe 0 $
     Map.lookup (bufferPointer s, c) (stateBuses s)
 
 {-
@@ -103,8 +103,8 @@ Buses are always read at bufferPointer
 Writing with delay 0 is an error
 Writing with delay n writes at (bufferPointer+n)
 -}
-writeBus :: Int -> Int -> Double -> State -> State 
-writeBus n c x s 
+writeBus :: Int -> Int -> Double -> State -> State
+writeBus n c x s
     | n <= 0    = error "writeBus: Negative or zero delay."
     | otherwise = s { stateBuses = Map.insert (bufferPointer s + n, c) x (stateBuses s) }
 
@@ -128,23 +128,23 @@ step :: Signal -> State -> (Double, State)
 step = go
     where
         go Random !s           = {-# SCC "random" #-}   stateRandom s
-        go Time !s             = {-# SCC "time" #-}     (stateTime s, s) 
+        go Time !s             = {-# SCC "time" #-}     (stateTime s, s)
         go (Constant x) !s     = {-# SCC "constant" #-} (x, s)
- 
-        go (Lift _ f a) !s     = {-# SCC "lift" #-}     let 
-            (!xa, !sa) = a `step` s 
+
+        go (Lift _ f a) !s     = {-# SCC "lift" #-}     let
+            (!xa, !sa) = a `step` s
             in (f xa, sa)
         go (Lift2 _ f a b) !s  = {-# SCC "lift2" #-}    let
             (!xa, !sa) = a `step` s
-            (!xb, !sb) = b `step` sa 
-            in (f xa xb, sb)      
+            (!xb, !sb) = b `step` sa
+            in (f xa xb, sb)
             -- TODO could be more parallel with non-sequential state
- 
+
         go (Input c) !s      = {-# SCC "input" #-}      (readSamp c s, s)
-        go (Output n c a) !s = {-# SCC "output" #-}     let 
+        go (Output n c a) !s = {-# SCC "output" #-}     let
             (xa, sa) = a `step` s
             in (xa, writeSamp n c xa sa)
-        
+
         go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
 
 
@@ -157,7 +157,7 @@ runVec n a = Vector.unfoldrN n (runBase a) defState
 
 runBase :: Signal -> State -> Maybe (Double, State)
 runBase a = Just . fmap incState . step a2
-    where                                                
+    where
         !a2        = (optimize . simplify) a
 
 
@@ -191,20 +191,20 @@ instance Buffer [] Double where
         return (fp, 0, len)
 
 writeSignal :: FilePath -> Signal -> IO ()
-writeSignal path a = do                              
+writeSignal path a = do
     let buffer = runVec (44100*10) $! a
     Sound.File.Sndfile.writeFile info path buffer
     return ()
-        where              
+        where
             info   = Info {
                     frames      = (44100*10),
                     samplerate  = 44100,
                     channels    = 1,
-                    format      = Format 
-                                    HeaderFormatWav 
-                                    SampleFormatDouble 
+                    format      = Format
+                                    HeaderFormatWav
+                                    SampleFormatDouble
                                     EndianCpu,
                     sections    = 1,
                     seekable    = True
                 }
-                           
+

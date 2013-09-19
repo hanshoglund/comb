@@ -1,7 +1,7 @@
 
 -- |
 -- Faust-based implementation and export utilities.
---                                                    
+--
 -- This implementation is very fast but has some limitations:
 --
 -- * Non real-time only.
@@ -36,11 +36,11 @@ signalToFaust a = prefix ++ "process = " ++ go 0 a ++ ";\n\n"
         varName 1 = "y"
         varName 2 = "z"
         varName n = "v" ++ show n
-        
+
         func ['(',o1,')']    = [o1]
         func ['(',o1,o2,')'] = [o1,o2]
         func a               = a
-        
+
         prefix = ""
             ++ "declare name \"test\";\n"
             ++ "\n"
@@ -70,12 +70,12 @@ drawSignalFaust path a = do
 
 
 writeSignal :: FilePath -> Signal -> IO ()
-writeSignal path a = do   
+writeSignal path a = do
     writeFile "test.dsp" (signalToFaust a)
 
     -- TODO assure dir and input file
     system "faust -a sndfile.cpp test.dsp > test-sndfile/test.cpp"
-    
+
     system "c++ -lsndfile -O3 test-sndfile/test.cpp -o test-sndfile/test"
     system $ "test-sndfile/test test-sndfile/in.wav " ++ "./" ++ path
     return ()
