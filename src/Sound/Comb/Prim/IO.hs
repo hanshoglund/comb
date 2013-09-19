@@ -3,8 +3,7 @@
 
 -- |
 -- This implementation is similar to "Sound.Comb.Prim.Ref", but runs all state
--- in 'IO' and uses mutable vectors as buffers. It is generally 2-3 times faster
--- than the reference implementation.
+-- in 'IO' and uses "Data.Vector.Unboxed" for buffers.
 --
 module Sound.Comb.Prim.IO (
         State,

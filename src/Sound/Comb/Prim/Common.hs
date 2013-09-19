@@ -69,9 +69,13 @@ data Signal
     -- | Output.
     | Output Int Int Signal
 
+-- | 
+-- Is this a variable (non-constant) signal?
 isVariable :: Signal -> Bool
 isVariable = not . isConstant
 
+-- | 
+-- Is this a constant signal?
 isConstant :: Signal -> Bool
 isConstant = go
     where
@@ -83,12 +87,19 @@ isConstant = go
         go (Input _)        = False
         go (Output _ _ _)   = False
 
+-- | 
+-- Are these all constant signals?
 areConstant :: [Signal] -> Bool
 areConstant = getAll . mconcat . fmap (All . isConstant)
 
+-- | 
+-- Number of nodes in the signal.
 signalNodeCount :: Signal -> Int
 signalNodeCount x = getSum $ foldMap (const (Sum 1)) $ signalTree x
 
+-- | 
+-- Convert a signal to a tree of names.
+-- Useful for debugging optimizations etc.
 signalTree :: Signal -> Tree String
 signalTree = go . simplify
     where
@@ -151,6 +162,11 @@ optimize1 = go
             | areConstant [a,b] && isVariable c     = Lift2 "(*)" f c (optimize $ Lift2 "(*)" f a b)
             | otherwise                             = noOpt
 
+        -- TODO
+        -- More advanced optimizations:
+        --
+        --  * Common sub-expression elimination (could be very efficient here)
+        --  * Fusion (not for Faust backend!)
 
         go a = a
                   
@@ -277,14 +293,21 @@ former  = Lift2 "former" (\x _ -> x)
 loop    = Loop
 delay   = Delay
 
+-- | 
+-- The impulse function: @1@ at time @0@, otherwise @0@.
+--
 impulse :: Signal
 impulse = lift' "mkImp" (\x -> if x == 0 then 1 else 0) time
 
--- | Goes from 0 to tau n times per second.
---   Suitable for feeding a sine oscillator.
+-- | 
+-- Goes from 0 to tau during @(1/x)@ seconds. Suitable for feeding a sine oscillator.
+-- 
 line :: Double -> Signal
 line n = time*tau*constant n
 
+-- | 
+-- Low-pass filter, based on 'biquad'.
+-- 
 lowPass :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal
 lowPass fc fs q peakGain = biquad a0 a1 a2 b1 b2
     where                                                           
@@ -307,6 +330,9 @@ lowPass fc fs q peakGain = biquad a0 a1 a2 b1 b2
                 b1 = 2 * (k^2 - 1) * norm
                 b2 = (1 - k / q + k^2) * norm
 
+-- | 
+-- A biquad filter.
+-- 
 biquad :: Signal -> Signal -> Signal -> Signal -> Signal -> Signal -> Signal
 biquad b0 b1 b2 a1 a2 x = loop $ \y -> 
     b0*x + b1 * delay 1 x + b2 * delay 2 x 

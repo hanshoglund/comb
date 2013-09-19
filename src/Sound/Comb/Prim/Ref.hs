@@ -2,7 +2,7 @@
 {-# LANGUAGE NoMonomorphismRestriction, BangPatterns, MultiParamTypeClasses #-}
 
 -- |
--- Reference implementation, using a pure state monad.
+-- Reference implementation, using a pure state monad and "Data.Map" for buffers.
 --
 -- Should not be used except for testing and validating new functionality.
 --
