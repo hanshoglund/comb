@@ -111,9 +111,9 @@ writeBus n c x s
 bufferPointer :: State -> Int
 bufferPointer s = stateCount s `mod` kMaxDelay
 
-kMaxInput = 1024
-kMaxBuses = 20
-kMaxDelay = 44100*60*5
+kMaxInputs = 1024
+kMaxBuses  = 20
+kMaxDelay  = 44100*60*5
 
 --------------------------------------------------------------------------------
 
@@ -125,7 +125,7 @@ verify :: Signal -> State -> Bool
 verify a s = True
     && requiredDelay a <= kMaxDelay
     && requiredBuses a <= kMaxBuses
-    && requiredInputs a <= kMaxInput
+    && requiredInputs a <= kMaxInputs
 
 -- |
 -- Run a signal over a state. Only works on simplified signals.

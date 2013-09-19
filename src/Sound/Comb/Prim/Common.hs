@@ -33,7 +33,7 @@ module Sound.Comb.Prim.Common (
         lift2',
 
         -- ** Arithmetic
-        mod',
+        fmod,
 
         -- ** Special
         former,
@@ -372,8 +372,8 @@ former  = Lift2 "former" (\x _ -> x)
 loop    = Loop
 delay   = Delay
 
-mod' :: Signal -> Signal -> Signal
-mod' = lift2' "divMod" Fixed.mod'
+fmod :: Signal -> Signal -> Signal
+fmod = lift2' "divMod" Fixed.mod'
 
 -- |
 -- The impulse function: @1@ at time @0@, otherwise @0@.

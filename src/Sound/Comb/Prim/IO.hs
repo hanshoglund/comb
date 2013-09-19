@@ -51,7 +51,7 @@ data State  = State {
 
 newState :: IO State
 newState = do
-    is <- MVector.replicate kMaxBuses 0
+    is <- MVector.replicate kMaxInputs 0
     bs <- MVector.replicate (kMaxBuses*kMaxDelay) 0
     c <- newIORef 0
     r <- newIORef 44100
@@ -111,9 +111,9 @@ bufferPointer s = do
 indexBus :: (Int,Int) -> Int
 indexBus (n,c) = c*kMaxDelay + n
 
-kMaxInput = 1024
-kMaxBuses = 20
-kMaxDelay = 44100*60*5
+kMaxInputs = 1024
+kMaxBuses  = 20
+kMaxDelay  = 44100*60*5
 
 --------------------------------------------------------------------------------
 
@@ -124,7 +124,7 @@ verify :: Signal -> State -> Bool
 verify a s = True
     && requiredDelay a <= kMaxDelay
     && requiredBuses a <= kMaxBuses
-    && requiredInputs a <= kMaxInput
+    && requiredInputs a <= kMaxInputs
 
 -- |
 -- Run a signal over a state. Only works on simplified signals.
