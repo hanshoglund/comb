@@ -96,12 +96,12 @@ Write with some delay.
 Buses are always read at bufferPointer
 
 Writing with delay 0 is an error
-Writing with delay n writes at (bufferPointer+n)
+Writing with delay n writes at @(bufferPointer+n) `mod` kMaxDelay@
 -}
 writeBus :: Int -> Int -> Double -> State -> IO ()
 writeBus n c x s = do
     bp <- bufferPointer s
-    MVector.unsafeWrite (stateBuses s) (indexBus (bp + n, c)) x
+    MVector.unsafeWrite (stateBuses s) (indexBus (bp + n `mod` kMaxDelay, c)) x
 
 bufferPointer :: State -> IO Int
 bufferPointer s = do

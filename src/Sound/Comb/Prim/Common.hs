@@ -33,8 +33,8 @@ module Sound.Comb.Prim.Common (
         lift2',
 
         -- ** Special
-        latter,
         former,
+        latter,
 
         -- ** Delay and feedback
         loop,
@@ -266,7 +266,11 @@ simplify = go defPart
 
         go g x = x
 
-
+-- Evaluation order: left before right, then bottom before top
+-- Delay exploits the LBR rule to evaluate the input before the delayed expression
+-- Loop exploits the BBT rule to evaluate the fixed expression before the output
+-- Rule for vectorized evaluation_
+--     When evaluating (Output n _ a), at most n steps can be processed
 
 
 --------------------------------------------------------------------------------
@@ -339,6 +343,7 @@ lift'       :: String -> (Double -> Double) -> Signal -> Signal
 lift2'      :: String -> (Double -> Double -> Double) -> Signal -> Signal -> Signal
 
 -- | Run both in given order, return the value of the first argument.
+--   This is called @attach@ in Faust.
 former      :: Signal -> Signal -> Signal
 
 -- | Run both in given order, return the value of the second argument.

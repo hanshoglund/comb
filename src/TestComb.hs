@@ -5,7 +5,7 @@ module Main where
 
 import Sound.Comb
 import Sound.Comb.Prim.Common
-import Sound.Comb.Prim.Faust
+import Sound.Comb.Prim.IO
 
 main :: IO ()
 main = do
