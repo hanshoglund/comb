@@ -11,6 +11,9 @@ module Sound.Comb.Prim.Common (
         areConstant,
         signalNodeCount,
         signalTree,
+        requiredInputs,
+        requiredBuses,
+        requiredDelay,
 
         -- ** Optimization
         optimize,
@@ -132,6 +135,41 @@ signalTree = go . simplify
         go (Input c)        = Node ("input " ++ show c) []
         go (Output n c a)   = Node ("output " ++ show c ++ "[-"++show n++"]") [signalTree a]
 
+requiredInputs :: Signal -> Int
+requiredInputs = go
+    where
+        go Random           = 0
+        go Time             = 0
+        go (Constant _)     = 0
+        go (Lift _ _ a)     = go a
+        go (Lift2 _ _ a b)  = go a `max` go b
+        go (Input c)        = if c < 0 then 0 else c + 1
+        go (Output _ c a)   = (if c < 0 then 0 else c + 1) `max` go a
+
+requiredBuses :: Signal -> Int
+requiredBuses = go
+    where
+        go Random           = 0
+        go Time             = 0
+        go (Constant _)     = 0
+        go (Lift _ _ a)     = go a
+        go (Lift2 _ _ a b)  = go a `max` go b
+        go (Input c)        = if c < 0 then unneg c + 1 else 0
+        go (Output _ c a)   = (if c < 0 then unneg c + 1 else 0) `max` go a
+
+-- | Number of required delay steps
+requiredDelay :: Signal -> Int
+requiredDelay = go
+    where
+        go Random           = 0
+        go Time             = 0
+        go (Constant _)     = 0
+        go (Lift _ _ a)     = go a
+        go (Lift2 _ _ a b)  = go a `max` go b
+        go (Input _)        = 0
+        go (Output n _ a)   = n `max` go a
+        go _                = error "requiredDelay: Unknown signal type, perhaps you forgot simplify"
+
 -- |
 -- Optimize a signal. Only works on simplified signals.
 --
@@ -191,6 +229,8 @@ optimize1 = go
         --
         --  * Common sub-expression elimination (could be very efficient here)
         --  * Fusion (not for Faust backend!)
+        --  * Join nested delays (requires a pre-simplify step)
+        --  *   Or more generally: join nested input/output (possible?)
 
         go a = a
 

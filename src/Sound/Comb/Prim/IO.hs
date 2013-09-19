@@ -111,11 +111,20 @@ bufferPointer s = do
 indexBus :: (Int,Int) -> Int
 indexBus (n,c) = c*kMaxDelay + n
 
+kMaxInput = 1024
 kMaxBuses = 20
 kMaxDelay = 44100*60*5
 
 --------------------------------------------------------------------------------
 
+-- |
+-- Verify that a signal can be run. Only works on simplified signals.
+--
+verify :: Signal -> State -> Bool
+verify a s = True
+    && requiredDelay a <= kMaxDelay
+    && requiredBuses a <= kMaxBuses
+    && requiredInputs a <= kMaxInput
 
 -- |
 -- Run a signal over a state. Only works on simplified signals.
@@ -159,10 +168,12 @@ run n a = Vector.toList <$> runVec n a
 runVec :: Int -> Signal -> IO (Vector Double)
 runVec n a = do
     s      <- newState
-    let a2 = (optimize . simplify) a
-    Vector.generateM n $ \i -> do
-        incState s
-        step a2 s
+    let a2 = optimize (simplify a)
+    let v  = (simplify a) `verify` s
+    if not v then error "runVec: Could not verify signal" else 
+        Vector.generateM n $ \i -> do
+            incState s
+            a2 `step` s
 
 
 --------------------------------------------------------------------------------

@@ -10,7 +10,9 @@ first  f (a,b)      = (f a, b)
 second f (a,b)      = (a, f b)
 swap (a,b)          = (b, a)
 dup x               = (x, x)
+
 neg x               = negate (x + 1)
+unneg x             = (negate x) - 1
 
 -- | View as bars if in range (-1,1)
 toBars :: Double -> String

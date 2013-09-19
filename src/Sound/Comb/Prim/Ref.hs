@@ -111,11 +111,21 @@ writeBus n c x s
 bufferPointer :: State -> Int
 bufferPointer s = stateCount s `mod` kMaxDelay
 
+kMaxInput = 1024
 kMaxBuses = 20
 kMaxDelay = 44100*60*5
 
 --------------------------------------------------------------------------------
 
+
+-- |
+-- Verify that a signal can be run. Only works on simplified signals.
+--
+verify :: Signal -> State -> Bool
+verify a s = True
+    && requiredDelay a <= kMaxDelay
+    && requiredBuses a <= kMaxBuses
+    && requiredInputs a <= kMaxInput
 
 -- |
 -- Run a signal over a state. Only works on simplified signals.
@@ -150,15 +160,17 @@ step = go
 
 
 run :: Signal -> [Double]
-run a = unfoldr (runBase a) defState
+run a = let s = defState
+    in if not (a `verify` s) then error "Could not verify" else 
+        unfoldr (runBase a) s
 
 runVec :: Int -> Signal -> Vector Double
 runVec n a = Vector.unfoldrN n (runBase a) defState
 
 runBase :: Signal -> State -> Maybe (Double, State)
 runBase a = Just . fmap incState . step a2
-    where
-        !a2        = (optimize . simplify) a
+    where       
+        !a2 = optimize (simplify a)
 
 
 --------------------------------------------------------------------------------
