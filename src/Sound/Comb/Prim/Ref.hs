@@ -86,8 +86,8 @@ stateTime :: State -> Double
 stateTime s = fromIntegral (stateCount s) / stateRate s
 
 -- | Random value
-stateRandom :: State -> (State, Double)
-stateRandom s = (s {stateRandomGen = g}, x) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
+stateRandom :: State -> (Double, State)
+stateRandom s = (x, s {stateRandomGen = g}) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
 
 --------------------------------------------------------------------------------
 -- Internal state stuff
@@ -127,26 +127,26 @@ kMaxDelay = 44100*60*5
 -- function is then unfolded to yield the outputs. We might think of the repeated s
 -- application as 'run time'
 --
-step :: Signal -> State -> (State, Double)
+step :: Signal -> State -> (Double, State)
 step = go
     where
         go Random !s           = {-# SCC "random" #-}   stateRandom s
-        go Time !s             = {-# SCC "time" #-}     (s, stateTime s) 
-        go (Constant x) !s     = {-# SCC "constant" #-} (s, x)
+        go Time !s             = {-# SCC "time" #-}     (stateTime s, s) 
+        go (Constant x) !s     = {-# SCC "constant" #-} (x, s)
  
         go (Lift _ f a) !s     = {-# SCC "lift" #-}     let 
-            (!sa, !xa) = a `step` s 
-            in (sa, f xa)
+            (!xa, !sa) = a `step` s 
+            in (f xa, sa)
         go (Lift2 _ f a b) !s  = {-# SCC "lift2" #-}    let
-            (!sa, !xa) = a `step` s
-            (!sb, !xb) = b `step` sa 
-            in (sb, f xa xb)      
+            (!xa, !sa) = a `step` s
+            (!xb, !sb) = b `step` sa 
+            in (f xa xb, sb)      
             -- TODO could be more parallel with non-sequential state
  
-        go (Input c) !s      = {-# SCC "input" #-}      (s, readSamp c s)
+        go (Input c) !s      = {-# SCC "input" #-}      (readSamp c s, s)
         go (Output n c a) !s = {-# SCC "output" #-}     let 
-            (sa, xa) = a `step` s
-            in (writeSamp n c xa sa, xa)
+            (xa, sa) = a `step` s
+            in (xa, writeSamp n c xa sa)
         
         go _ _ = error "step: Unknown signal type, perhaps you forgot simplify"
 
@@ -161,7 +161,7 @@ runVec :: Int -> Signal -> Vector Double
 runVec n a = Vector.unfoldrN n (runBase a) defState
 
 runBase :: Signal -> State -> Maybe (Double, State)
-runBase a = Just . fmap incState . swap . step a2
+runBase a = Just . fmap incState . step a2
     where                                                
         !a2        = (optimize . simplify) a
 
