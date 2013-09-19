@@ -81,7 +81,7 @@ stateRandom :: State -> IO Double
 stateRandom _ = randomRIO (-1,1)
 
 -- --------------------------------------------------------------------------------
--- -- Internal state stuff
+-- Internal state stuff
 
 readActualInput :: Int -> State -> IO Double
 readActualInput c s = MVector.unsafeRead (stateInputs s) c
