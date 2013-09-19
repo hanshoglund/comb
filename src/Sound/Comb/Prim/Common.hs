@@ -5,7 +5,7 @@ module Sound.Comb.Prim.Common (
         -- * Signal type
         Signal(..),
 
-        -- * Inspecting and running signals
+        -- * Inspecting signals
         isVariable,
         isConstant,
         areConstant,
@@ -43,7 +43,6 @@ module Sound.Comb.Prim.Common (
         line,
         saw,
         saw',
-        square,
         lowPass,
         biquad,
 ) where
