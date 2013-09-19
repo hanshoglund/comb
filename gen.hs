@@ -1,25 +1,25 @@
 
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, GADTs #-}
 
-data State = State
-readSamp :: Int -> State -> Double
-writeSamp :: Int -> Int -> Double -> State -> State
-stateTime :: State -> Double
-stateRandom :: State -> (Double, State)
+data State a = State
+readSamp    :: Int -> State a -> a
+writeSamp   :: Int -> Int -> a -> State a -> State a
+stateTime   :: State a -> a
+stateRandom :: State a -> (a, State a)
 
 (readSamp, writeSamp, stateTime, stateRandom) = undefined
 
-data Signal
-    = Time
-    | Random
-    | Constant Double
-    | Lift  String (Double -> Double) Signal                 
-    | Lift2 String (Double -> Double -> Double) Signal Signal
-    | Input Int
-    | Output Int Int Signal
+data Signal a where
+    Time        :: Signal Double
+    Random      :: Signal Double
+    Constant    :: a -> Signal a
+    Lift        :: String -> (a -> b) -> Signal a -> Signal b
+    Lift2       :: String -> (a -> b -> c) -> Signal a -> Signal b -> Signal c
+    Input       :: Int -> Signal Double
+    Output      :: Int -> Int -> Signal Double -> Signal Double
 
 
-step :: Signal -> State -> (Double, State)
+step :: Signal a -> State Double -> (a, State Double)
 step = go
     where
         go Random !s           = {-# SCC "random" #-}   stateRandom s
