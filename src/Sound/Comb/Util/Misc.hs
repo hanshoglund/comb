@@ -2,6 +2,7 @@
 {-# LANGUAGE NoMonomorphismRestriction, BangPatterns, MultiParamTypeClasses #-}
 
 module Sound.Comb.Util.Misc where
+import Data.List (transpose)
 
 tau :: Floating a => a
 tau                 = 2 * pi
@@ -19,6 +20,9 @@ toBars x = let n = round (toPos x * width) in
         else replicate n ' ' ++ "." ++ replicate (width-n) ' ' ++ "|"
     where 
         width = 80
+
+putBars :: [Double] -> IO ()
+putBars = mapM_ (putStrLn.toBars)
 
 -- | From range (0,1) to range (-1,1)
 toFull :: Num a => a -> a

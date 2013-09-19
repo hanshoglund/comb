@@ -5,7 +5,7 @@ module Main where
 
 import Sound.Comb
 import Sound.Comb.Prim.Common
-import Sound.Comb.Prim.IO
+import Sound.Comb.Prim.Faust
 
 main :: IO ()
 main = do
@@ -24,11 +24,11 @@ major freq = (sin (freq*4) + sin (freq*5) + sin (freq*6))*0.02
 -- sig = major $ line $ freq/4
 
 -- sig = sin (line 440)*(sin (line$1/2))*0.1 + delaySec 0.1 (sin (line 440*3/5)*(sin (line$1/2))*0.1)
--- sig = random*0.1*sin(line $ 1/2)
+sig = random*0.1*sin(line $ 1/2)
 
-sig = lowPass (1000+5000*sweep) sr 0.01 6 random
-    where
-        sweep = (sin $ line (1/(10*2)) `max` 0)
+-- sig = lowPass (1000+5000*sweep) sr 0.01 6 random
+    -- where
+        -- sweep = (sin $ line (1/(10*2)) `max` 0)
 
 -- sig = (sum $ fmap (\x -> delaySec (x/10) impulse) [1..10])
 

@@ -10,7 +10,6 @@ module Sound.Comb.Prim.Ref (
         State,
         defState,
         step,
-        put,
         run,
         runVec,
         runBase,
@@ -154,9 +153,6 @@ step = go
 
 
 
-
-put :: Signal -> IO ()
-put a = mapM_ (putStrLn.toBars) $ take 60 $ run a
 
 run :: Signal -> [Double]                               
 run a = unfoldr (runBase a) defState
