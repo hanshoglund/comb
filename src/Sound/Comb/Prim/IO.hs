@@ -11,7 +11,6 @@ module Sound.Comb.Prim.IO (
         step,
         run,
         runVec,
-        runBase,
         writeSignal
 ) where
 
@@ -164,12 +163,6 @@ runVec n a = do
     Vector.generateM n $ \i -> do
         incState s
         step a2 s
-
-runBase :: Signal -> State -> Maybe (Double, State)
-runBase = undefined
--- runBase a = Just . fmap incState . swap . step a2
-    -- where
-        -- !a2        = (optimize . simplify) a
 
 
 --------------------------------------------------------------------------------
