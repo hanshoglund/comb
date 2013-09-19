@@ -37,7 +37,6 @@ import Data.Vector.Unboxed.Mutable (IOVector)
 import qualified Data.Vector.Unboxed as Vector
 import qualified Data.Vector.Unboxed.Mutable as MVector
 
-
 import Sound.Comb.Util.Part
 import Sound.Comb.Util.Misc
 import Sound.Comb.Prim.Common
@@ -65,9 +64,6 @@ data State  = State {
 
 defState :: State
 defState = State mempty mempty 0 44100 (mkStdGen 198712261455)
-
--- prefilledBuses :: Map (Int,Int) Double
--- prefilledBuses = Map.fromList $! [ (a,b) | a <- [1..1000], b <- [-1,-2..negate kMaxBuses]] `zip` (repeat 0)
 
 -- | @readSamp channel state@
 readSamp :: Int -> State -> Double
@@ -100,12 +96,13 @@ readBus :: Int -> State -> Double
 readBus c s = fromMaybe 0 $ 
     Map.lookup (bufferPointer s, c) (stateBuses s)
 
--- Write with some delay.
--- Buses are always read at bufferPointer
---
--- Writing with delay 0 is an error
--- Writing with delay n writes at (bufferPointer+n)
+{-
+Write with some delay.
+Buses are always read at bufferPointer
 
+Writing with delay 0 is an error
+Writing with delay n writes at (bufferPointer+n)
+-}
 writeBus :: Int -> Int -> Double -> State -> State 
 writeBus n c x s 
     | n <= 0    = error "writeBus: Negative or zero delay."
@@ -152,12 +149,10 @@ step = go
 
 
 
-
-
-run :: Signal -> [Double]                               
+run :: Signal -> [Double]
 run a = unfoldr (runBase a) defState
 
-runVec :: Int -> Signal -> Vector Double                               
+runVec :: Int -> Signal -> Vector Double
 runVec n a = Vector.unfoldrN n (runBase a) defState
 
 runBase :: Signal -> State -> Maybe (Double, State)
