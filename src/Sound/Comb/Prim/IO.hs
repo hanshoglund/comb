@@ -9,13 +9,13 @@ module Sound.Comb.Prim.IO (
         State,
         newState,
         step,
-        -- put,
-        -- run,
+        run,
         runVec,
         runBase,
         writeSignal
 ) where
 
+import Control.Applicative
 import Control.Monad (forM_)
 import Data.IORef
 import Data.Vector.Unboxed (Vector, MVector)
@@ -161,8 +161,8 @@ step = go
 -- put :: Signal -> IO ()
 -- put a = mapM_ (putStrLn.toBars) $ take 60 $ run a
 
--- run :: Signal -> [Double]                               
--- run a = unfoldr (runBase a) defState
+run :: Int -> Signal -> IO [Double]                               
+run n a = Vector.toList <$> runVec n a
 
 runVec :: Int -> Signal -> IO (Vector Double)
 runVec n a = do
