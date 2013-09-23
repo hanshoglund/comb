@@ -65,6 +65,14 @@ data State  = State {
 defState :: State
 defState = State mempty mempty 0 44100 (mkStdGen 198712261455)
 
+-- | Current time.
+stateTime :: State -> Double
+stateTime s = fromIntegral (stateCount s) / stateRate s
+
+-- | Random value
+stateRandom :: State -> (Double, State)
+stateRandom s = (x, s {stateRandomGen = g}) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
+
 -- | @readSamp channel state@
 readSamp :: Int -> State -> Double
 readSamp c s = if c > 0 then readActualInput c s else readBus (neg c) s
@@ -76,14 +84,6 @@ writeSamp n c = writeBus n (neg c)
 -- | Advance state count
 incState :: State -> State
 incState x = x { stateCount = stateCount x + 1 }
-
--- | Current time.
-stateTime :: State -> Double
-stateTime s = fromIntegral (stateCount s) / stateRate s
-
--- | Random value
-stateRandom :: State -> (Double, State)
-stateRandom s = (x, s {stateRandomGen = g}) where (x, g) = randomR (-1,1::Double) (stateRandomGen s)
 
 --------------------------------------------------------------------------------
 -- Internal state stuff
